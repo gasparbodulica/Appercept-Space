@@ -37,13 +37,13 @@ export function CellRenderer({ column, row, databaseId, isEditing, onStartEdit, 
   }
 
   return (
-    <DisplayCell column={column} value={value} onClick={onStartEdit} />
+    <DisplayCell column={column} row={row} databaseId={databaseId} value={value} onClick={onStartEdit} />
   );
 }
 
 // ─── Display ───────────────────────────────────────────────────────────────────
 
-function DisplayCell({ column, value, onClick }: { column: Column; value: CellValue; onClick: () => void }) {
+function DisplayCell({ column, row, databaseId, value, onClick }: { column: Column; row: Row; databaseId: string; value: CellValue; onClick: () => void }) {
   const style: React.CSSProperties = {
     display: 'flex', alignItems: 'center', width: '100%', height: '100%',
     padding: '0 10px', cursor: 'text', userSelect: 'none', overflow: 'hidden',

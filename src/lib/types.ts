@@ -41,6 +41,20 @@ export interface User {
   color: string;
 }
 
+// A login account. Access is gated: only `approved` accounts can enter.
+export interface Account {
+  id: string;
+  name: string;
+  email: string;
+  password: string;     // demo only — plaintext in localStorage
+  approved: boolean;    // admin must grant access before they can enter
+  role: 'admin' | 'member' | 'viewer';
+  initials: string;
+  color: string;
+  avatar_url?: string;
+  created_at: string;
+}
+
 export type PageType =
   | 'todo' | 'clients' | 'projects' | 'meetings' | 'companies' | 'costs'
   | 'files' | 'passwords' | 'clubcrowd' | 'custom' | 'dashboard';
@@ -58,6 +72,7 @@ export interface Page {
   badge?: number;
   is_active?: boolean;
   favorite?: boolean;
+  owner_id?: string; // if set, this page is private and only visible to that user
 }
 
 export interface Column {

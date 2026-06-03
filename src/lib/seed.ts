@@ -1,4 +1,4 @@
-import { Column, Row, Database, Page, User, Workspace, ViewConfig, Comment, Activity, Notification } from './types';
+import { Column, Row, Database, Page, User, Workspace, ViewConfig, Comment, Activity, Notification, Account } from './types';
 
 // ─── Seed Data ───────────────────────────────────────────────────────────────
 
@@ -16,6 +16,19 @@ export const USERS: User[] = [
   { id: 'u-4', workspace_id: 'ws-1', name: 'Dev Freelancer', email: 'dev@appercept.net', role: 'member', initials: 'DF', color: '#2dd4bf' },
 ];
 
+// Per-user PRIVATE To-Do — one page+database each, only visible to its owner
+const PRIVATE_TODO_PAGES: Page[] = USERS.map((u, i) => ({
+  id: `p-ptodo-${u.id}`,
+  workspace_id: 'ws-1',
+  title: 'My To-Do',
+  icon: 'IconCircleCheck',
+  iconColor: '#00d2ff',
+  type: 'custom',
+  position: 100 + i,
+  slug: `my-todo-${u.id}`,
+  owner_id: u.id,
+}));
+
 export const PAGES: Page[] = [
   { id: 'p-todo', workspace_id: 'ws-1', title: 'To-Do', icon: 'IconCheckbox', iconColor: '#1c75bc', type: 'todo', position: 1, slug: 'todo', is_active: true },
   { id: 'p-clients', workspace_id: 'ws-1', title: 'Clients', icon: 'IconUsers', iconColor: '#2ee89a', type: 'clients', position: 2, slug: 'clients' },
@@ -28,7 +41,35 @@ export const PAGES: Page[] = [
   { id: 'p-files', workspace_id: 'ws-1', title: 'Files', icon: 'IconFolder', iconColor: '#6b7280', type: 'files', position: 9, slug: 'files' },
   { id: 'p-passwords', workspace_id: 'ws-1', title: 'Passwords', icon: 'IconLock', iconColor: '#ff4f6a', type: 'passwords', position: 10, slug: 'passwords' },
   { id: 'p-clubcrowd', workspace_id: 'ws-1', title: 'ClubCrowd Clients', icon: 'IconMusic', iconColor: '#f472b6', type: 'clubcrowd', position: 11, slug: 'clubcrowd' },
+  ...PRIVATE_TODO_PAGES,
 ];
+
+// Build a private To-Do database for each user
+function makePrivateTodoDb(userId: string): Database {
+  const dbId = `db-ptodo-${userId}`;
+  const cols: Column[] = [
+    { id: `${dbId}-task`,     database_id: dbId, name: 'Task',     type: 'text',     position: 0, config: {}, hidden: false, width: 300 },
+    { id: `${dbId}-status`,   database_id: dbId, name: 'Status',   type: 'status',   position: 1, config: {}, hidden: false, width: 140 },
+    { id: `${dbId}-priority`, database_id: dbId, name: 'Priority', type: 'priority', position: 2, config: {}, hidden: false, width: 120 },
+    { id: `${dbId}-due`,      database_id: dbId, name: 'Due date', type: 'date',     position: 3, config: {}, hidden: false, width: 130 },
+    { id: `${dbId}-done`,     database_id: dbId, name: 'Done',     type: 'checkbox', position: 4, config: {}, hidden: false, width: 80 },
+  ];
+  const now = '2026-06-01T00:00:00Z';
+  const rows: Row[] = [
+    { id: `${dbId}-r1`, database_id: dbId, position: 0, created_by: userId, created_at: now, updated_at: now, cells: { [`${dbId}-task`]: 'My private task — only I can see this', [`${dbId}-status`]: 'Not started', [`${dbId}-priority`]: 'Medium' } },
+    { id: `${dbId}-r2`, database_id: dbId, position: 1, created_by: userId, created_at: now, updated_at: now, cells: {} },
+  ];
+  return {
+    id: dbId, page_id: `p-ptodo-${userId}`, name: 'My To-Do',
+    columns: cols, rows,
+    views: [{ id: `${dbId}-view`, database_id: dbId, name: 'My Tasks', type: 'table', icon: '☰', filters: [], sorts: [], hidden_cols: [], is_default: true }],
+    default_view: 'table',
+  };
+}
+
+const PRIVATE_TODO_DATABASES: Record<string, Database> = Object.fromEntries(
+  USERS.map((u) => [`db-ptodo-${u.id}`, makePrivateTodoDb(u.id)])
+);
 
 // ─── TO-DO DATABASE ──────────────────────────────────────────────────────────
 const TODO_COLS: Column[] = [
@@ -73,19 +114,20 @@ const CLIENT_COLS: Column[] = [
   { id: 'cc-email', database_id: 'db-clients', name: 'Email', type: 'email', position: 2, config: {}, hidden: false, width: 200 },
   { id: 'cc-phone', database_id: 'db-clients', name: 'Phone', type: 'phone', position: 3, config: {}, hidden: false, width: 140 },
   { id: 'cc-status', database_id: 'db-clients', name: 'Status', type: 'select', position: 4, config: { options: [{ id: 'o1', label: 'Active', color: '#3ecf8e' }, { id: 'o2', label: 'Pending', color: '#f5a623' }, { id: 'o3', label: 'Inactive', color: '#6b7280' }] }, hidden: false, width: 100 },
-  { id: 'cc-revenue', database_id: 'db-clients', name: 'Monthly revenue', type: 'number', position: 5, config: { prefix: '€' }, hidden: false, width: 140 },
-  { id: 'cc-notes', database_id: 'db-clients', name: 'Notes', type: 'text', position: 6, config: {}, hidden: false, width: 240 },
+  { id: 'cc-revenue', database_id: 'db-clients', name: 'Revenue', type: 'number', position: 5, config: { prefix: '€' }, hidden: false, width: 130 },
+  { id: 'cc-frequency', database_id: 'db-clients', name: 'Frequency', type: 'select', position: 6, config: { options: [{ id: 'cfr-once', label: 'One-time', color: '#6b7280' }, { id: 'cfr-month', label: 'Monthly', color: '#3ecf8e' }, { id: 'cfr-year', label: 'Yearly', color: '#a78bfa' }] }, hidden: false, width: 120 },
+  { id: 'cc-notes', database_id: 'db-clients', name: 'Notes', type: 'text', position: 7, config: {}, hidden: false, width: 240 },
 ];
 
 const CLIENT_ROWS: Row[] = [
-  { id: 'cr-1', database_id: 'db-clients', position: 0, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Albert Karner', 'cc-company': 'Medikal Lux d.o.o.', 'cc-email': 'albert@medikallux.hr', 'cc-status': 'Active', 'cc-revenue': 5600 } },
-  { id: 'cr-2', database_id: 'db-clients', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Stjepan Ursa', 'cc-company': 'Projekt90', 'cc-email': 'stjepan@projekt90.hr', 'cc-status': 'Active', 'cc-revenue': 2200 } },
-  { id: 'cr-3', database_id: 'db-clients', position: 2, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Marketing tim', 'cc-company': '24 Sata', 'cc-email': 'marketing@24sata.hr', 'cc-status': 'Active', 'cc-revenue': 8400 } },
-  { id: 'cr-4', database_id: 'db-clients', position: 3, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Nina Barić', 'cc-company': 'Papaya Music', 'cc-email': 'nina@papaya.hr', 'cc-status': 'Active', 'cc-revenue': 1800 } },
-  { id: 'cr-5', database_id: 'db-clients', position: 4, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Ana Kovač', 'cc-company': 'Backstage Beauty', 'cc-email': 'ana@backstage.hr', 'cc-status': 'Active', 'cc-revenue': 3200 } },
-  { id: 'cr-6', database_id: 'db-clients', position: 5, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Kristo Jaksa', 'cc-company': 'EFZG', 'cc-email': 'k.jaksa@efzg.hr', 'cc-status': 'Pending', 'cc-revenue': 0 } },
-  { id: 'cr-7', database_id: 'db-clients', position: 6, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Ivan Perić', 'cc-company': 'GymBros d.o.o.', 'cc-email': 'ivan@gymbros.hr', 'cc-status': 'Pending', 'cc-revenue': 0 } },
-  { id: 'cr-8', database_id: 'db-clients', position: 7, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Marta Šimić', 'cc-company': 'Kashetta', 'cc-email': 'marta@kashetta.hr', 'cc-status': 'Active', 'cc-revenue': 1400 } },
+  { id: 'cr-1', database_id: 'db-clients', position: 0, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Albert Karner', 'cc-company': 'Medikal Lux d.o.o.', 'cc-email': 'albert@medikallux.hr', 'cc-status': 'Active', 'cc-revenue': 5600, 'cc-frequency': 'Monthly' } },
+  { id: 'cr-2', database_id: 'db-clients', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Stjepan Ursa', 'cc-company': 'Projekt90', 'cc-email': 'stjepan@projekt90.hr', 'cc-status': 'Active', 'cc-revenue': 2200, 'cc-frequency': 'Monthly' } },
+  { id: 'cr-3', database_id: 'db-clients', position: 2, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Marketing tim', 'cc-company': '24 Sata', 'cc-email': 'marketing@24sata.hr', 'cc-status': 'Active', 'cc-revenue': 8400, 'cc-frequency': 'Monthly' } },
+  { id: 'cr-4', database_id: 'db-clients', position: 3, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Nina Barić', 'cc-company': 'Papaya Music', 'cc-email': 'nina@papaya.hr', 'cc-status': 'Active', 'cc-revenue': 1800, 'cc-frequency': 'Monthly' } },
+  { id: 'cr-5', database_id: 'db-clients', position: 4, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Ana Kovač', 'cc-company': 'Backstage Beauty', 'cc-email': 'ana@backstage.hr', 'cc-status': 'Active', 'cc-revenue': 3200, 'cc-frequency': 'Yearly' } },
+  { id: 'cr-6', database_id: 'db-clients', position: 5, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Kristo Jaksa', 'cc-company': 'EFZG', 'cc-email': 'k.jaksa@efzg.hr', 'cc-status': 'Pending', 'cc-revenue': 0, 'cc-frequency': 'Monthly' } },
+  { id: 'cr-7', database_id: 'db-clients', position: 6, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Ivan Perić', 'cc-company': 'GymBros d.o.o.', 'cc-email': 'ivan@gymbros.hr', 'cc-status': 'Pending', 'cc-revenue': 0, 'cc-frequency': 'Monthly' } },
+  { id: 'cr-8', database_id: 'db-clients', position: 7, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cc-name': 'Marta Šimić', 'cc-company': 'Kashetta', 'cc-email': 'marta@kashetta.hr', 'cc-status': 'Active', 'cc-revenue': 1400, 'cc-frequency': 'One-time' } },
 ];
 
 // ─── PROJECTS DATABASE ────────────────────────────────────────────────────────
@@ -132,43 +174,48 @@ const MEETING_ROWS: Row[] = [
 // ─── COMPANIES DATABASE ───────────────────────────────────────────────────────
 const COMPANY_COLS: Column[] = [
   { id: 'coc-name', database_id: 'db-companies', name: 'Company name', type: 'text', position: 0, config: {}, hidden: false, width: 220 },
-  { id: 'coc-industry', database_id: 'db-companies', name: 'Industry', type: 'select', position: 1, config: { options: [{ id: 'i1', label: 'Healthcare', color: '#3ecf8e' }, { id: 'i2', label: 'AI Consulting', color: '#4f6fff' }, { id: 'i3', label: 'Media', color: '#f5a623' }, { id: 'i4', label: 'Music', color: '#a78bfa' }, { id: 'i5', label: 'Fitness', color: '#2dd4bf' }, { id: 'i6', label: 'Beauty', color: '#f472b6' }, { id: 'i7', label: 'E-commerce', color: '#fb923c' }, { id: 'i8', label: 'Education', color: '#6b7280' }] }, hidden: false, width: 140 },
+  { id: 'coc-industry', database_id: 'db-companies', name: 'Industry', type: 'multi_select', position: 1, config: { options: [{ id: 'i1', label: 'Healthcare', color: '#3ecf8e' }, { id: 'i2', label: 'AI Consulting', color: '#1c75bc' }, { id: 'i9', label: 'AI Voicebot', color: '#00d2ff' }, { id: 'i10', label: 'AI Chatbot', color: '#60a5fa' }, { id: 'i11', label: 'Process Automation', color: '#a78bfa' }, { id: 'i3', label: 'Media', color: '#f5a623' }, { id: 'i4', label: 'Music', color: '#a78bfa' }, { id: 'i5', label: 'Fitness', color: '#2dd4bf' }, { id: 'i6', label: 'Beauty', color: '#f472b6' }, { id: 'i7', label: 'E-commerce', color: '#fb923c' }, { id: 'i8', label: 'Education', color: '#6b7280' }] }, hidden: false, width: 220 },
   { id: 'coc-oib', database_id: 'db-companies', name: 'OIB', type: 'text', position: 2, config: {}, hidden: false, width: 130 },
   { id: 'coc-director', database_id: 'db-companies', name: 'Director', type: 'text', position: 3, config: {}, hidden: false, width: 160 },
   { id: 'coc-email', database_id: 'db-companies', name: 'Email', type: 'email', position: 4, config: {}, hidden: false, width: 200 },
   { id: 'coc-phone', database_id: 'db-companies', name: 'Phone', type: 'phone', position: 5, config: {}, hidden: false, width: 140 },
   { id: 'coc-address', database_id: 'db-companies', name: 'Address', type: 'text', position: 6, config: {}, hidden: false, width: 220 },
+  { id: 'coc-revenue', database_id: 'db-companies', name: 'Monthly revenue', type: 'formula', position: 7, config: { formula: 'company_revenue', prefix: '€' }, hidden: false, width: 150 },
+  { id: 'coc-profit', database_id: 'db-companies', name: 'Monthly profit', type: 'formula', position: 8, config: { formula: 'company_profit', prefix: '€' }, hidden: false, width: 150 },
 ];
 
 const COMPANY_ROWS: Row[] = [
-  { id: 'cor-1', database_id: 'db-companies', position: 0, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Medikal Lux d.o.o.', 'coc-oib': '90063835455', 'coc-director': 'Albert Karner', 'coc-industry': 'Healthcare' } },
-  { id: 'cor-2', database_id: 'db-companies', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Egzosfera obrt', 'coc-oib': '56594199654', 'coc-director': 'Gašpar Bodulica', 'coc-industry': 'AI Consulting' } },
-  { id: 'cor-3', database_id: 'db-companies', position: 2, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': '24 Sata d.o.o.', 'coc-oib': null, 'coc-director': null, 'coc-industry': 'Media' } },
-  { id: 'cor-4', database_id: 'db-companies', position: 3, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Papaya Music', 'coc-oib': null, 'coc-director': 'Nina Barić', 'coc-industry': 'Music' } },
-  { id: 'cor-5', database_id: 'db-companies', position: 4, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'GymBros d.o.o.', 'coc-oib': null, 'coc-director': 'Ivan Perić', 'coc-industry': 'Fitness' } },
-  { id: 'cor-6', database_id: 'db-companies', position: 5, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Backstage Beauty', 'coc-oib': null, 'coc-director': 'Ana Kovač', 'coc-industry': 'Beauty' } },
-  { id: 'cor-7', database_id: 'db-companies', position: 6, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Kashetta', 'coc-oib': null, 'coc-director': 'Marta Šimić', 'coc-industry': 'E-commerce' } },
-  { id: 'cor-8', database_id: 'db-companies', position: 7, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'EFZG', 'coc-oib': null, 'coc-director': null, 'coc-industry': 'Education' } },
+  { id: 'cor-appercept', database_id: 'db-companies', position: 0, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Appercept', 'coc-oib': '56594199654', 'coc-director': 'Gašpar Bodulica', 'coc-industry': ['AI Consulting', 'AI Voicebot', 'AI Chatbot', 'Process Automation'] } },
+  { id: 'cor-1', database_id: 'db-companies', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Medikal Lux d.o.o.', 'coc-oib': '90063835455', 'coc-director': 'Albert Karner', 'coc-industry': ['Healthcare'] } },
+  { id: 'cor-2', database_id: 'db-companies', position: 2, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Egzosfera obrt', 'coc-oib': '56594199654', 'coc-director': 'Gašpar Bodulica', 'coc-industry': ['AI Consulting'] } },
+  { id: 'cor-3', database_id: 'db-companies', position: 3, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': '24 Sata d.o.o.', 'coc-oib': null, 'coc-director': null, 'coc-industry': ['Media'] } },
+  { id: 'cor-4', database_id: 'db-companies', position: 4, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Papaya Music', 'coc-oib': null, 'coc-director': 'Nina Barić', 'coc-industry': ['Music'] } },
+  { id: 'cor-5', database_id: 'db-companies', position: 5, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'GymBros d.o.o.', 'coc-oib': null, 'coc-director': 'Ivan Perić', 'coc-industry': ['Fitness'] } },
+  { id: 'cor-6', database_id: 'db-companies', position: 6, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Backstage Beauty', 'coc-oib': null, 'coc-director': 'Ana Kovač', 'coc-industry': ['Beauty'] } },
+  { id: 'cor-7', database_id: 'db-companies', position: 7, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Kashetta', 'coc-oib': null, 'coc-director': 'Marta Šimić', 'coc-industry': ['E-commerce'] } },
+  { id: 'cor-8', database_id: 'db-companies', position: 8, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'EFZG', 'coc-oib': null, 'coc-director': null, 'coc-industry': ['Education'] } },
 ];
 
 // ─── COSTS DATABASE ───────────────────────────────────────────────────────────
 const COST_COLS: Column[] = [
-  { id: 'costc-item', database_id: 'db-costs', name: 'Item', type: 'text', position: 0, config: {}, hidden: false, width: 240 },
-  { id: 'costc-type', database_id: 'db-costs', name: 'Type', type: 'select', position: 1, config: { options: [{ id: 'ct1', label: 'Income', color: '#3ecf8e' }, { id: 'ct2', label: 'Expense', color: '#ff5c5c' }] }, hidden: false, width: 100 },
-  { id: 'costc-amount', database_id: 'db-costs', name: 'Amount', type: 'number', position: 2, config: { prefix: '€' }, hidden: false, width: 110 },
-  { id: 'costc-date', database_id: 'db-costs', name: 'Date', type: 'date', position: 3, config: {}, hidden: false, width: 110 },
-  { id: 'costc-status', database_id: 'db-costs', name: 'Status', type: 'status', position: 4, config: {}, hidden: false, width: 120 },
-  { id: 'costc-category', database_id: 'db-costs', name: 'Category', type: 'select', position: 5, config: { options: [{ id: 'cat1', label: 'SaaS', color: '#4f6fff' }, { id: 'cat2', label: 'Freelance', color: '#a78bfa' }, { id: 'cat3', label: 'Tools', color: '#2dd4bf' }, { id: 'cat4', label: 'Tax', color: '#ff5c5c' }, { id: 'cat5', label: 'Client Revenue', color: '#3ecf8e' }] }, hidden: false, width: 140 },
-  { id: 'costc-notes', database_id: 'db-costs', name: 'Notes', type: 'text', position: 6, config: {}, hidden: false, width: 220 },
+  { id: 'costc-item', database_id: 'db-costs', name: 'Expense', type: 'text', position: 0, config: {}, hidden: false, width: 240 },
+  { id: 'costc-amount', database_id: 'db-costs', name: 'Amount', type: 'number', position: 1, config: { prefix: '€' }, hidden: false, width: 110 },
+  { id: 'costc-date', database_id: 'db-costs', name: 'Date', type: 'date', position: 2, config: {}, hidden: false, width: 110 },
+  { id: 'costc-status', database_id: 'db-costs', name: 'Status', type: 'status', position: 3, config: {}, hidden: false, width: 120 },
+  { id: 'costc-category', database_id: 'db-costs', name: 'Category', type: 'select', position: 4, config: { options: [{ id: 'cat1', label: 'SaaS', color: '#4f6fff' }, { id: 'cat2', label: 'Freelance', color: '#a78bfa' }, { id: 'cat3', label: 'Tools', color: '#2dd4bf' }, { id: 'cat4', label: 'Tax', color: '#ff5c5c' }, { id: 'cat6', label: 'Marketing', color: '#fb923c' }, { id: 'cat7', label: 'Office', color: '#6b7280' }] }, hidden: false, width: 140 },
+  { id: 'costc-company', database_id: 'db-costs', name: 'Company', type: 'select', position: 5, config: { options: [{ id: 'co-app', label: 'Appercept', color: '#1c75bc' }, { id: 'co-ml', label: 'Medikal Lux', color: '#3ecf8e' }, { id: 'co-pm', label: 'Papaya Music', color: '#a78bfa' }, { id: 'co-24', label: '24 Sata', color: '#f5a623' }, { id: 'co-gb', label: 'GymBros', color: '#2dd4bf' }, { id: 'co-bb', label: 'Backstage Beauty', color: '#f472b6' }, { id: 'co-ka', label: 'Kashetta', color: '#fb923c' }, { id: 'co-efzg', label: 'EFZG', color: '#6b7280' }] }, hidden: false, width: 150 },
+  { id: 'costc-frequency', database_id: 'db-costs', name: 'Frequency', type: 'select', position: 6, config: { options: [{ id: 'fr-once', label: 'One-time', color: '#6b7280' }, { id: 'fr-month', label: 'Monthly', color: '#1c75bc' }, { id: 'fr-year', label: 'Yearly', color: '#a78bfa' }] }, hidden: false, width: 120 },
+  { id: 'costc-notes', database_id: 'db-costs', name: 'Notes', type: 'text', position: 7, config: {}, hidden: false, width: 220 },
 ];
 
+// Costs holds EXPENSES only. Revenue comes from the company's Monthly revenue.
 const COST_ROWS: Row[] = [
-  { id: 'costr-1', database_id: 'db-costs', position: 0, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'Voice Bot SaaS — Medikal Lux', 'costc-type': 'Income', 'costc-amount': 600, 'costc-date': '2026-06-01', 'costc-status': 'Done', 'costc-category': 'Client Revenue' } },
-  { id: 'costr-2', database_id: 'db-costs', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'One-time implementation — Medikal Lux', 'costc-type': 'Income', 'costc-amount': 5000, 'costc-date': '2026-05-28', 'costc-status': 'Done', 'costc-category': 'Client Revenue' } },
-  { id: 'costr-3', database_id: 'db-costs', position: 2, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'Adobe Creative Cloud', 'costc-type': 'Expense', 'costc-amount': 60, 'costc-date': '2026-06-01', 'costc-status': 'Done', 'costc-category': 'SaaS' } },
-  { id: 'costr-4', database_id: 'db-costs', position: 3, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'DigitalOcean hosting', 'costc-type': 'Expense', 'costc-amount': 48, 'costc-date': '2026-06-01', 'costc-status': 'Done', 'costc-category': 'Tools' } },
-  { id: 'costr-5', database_id: 'db-costs', position: 4, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'Papaya Music retainer', 'costc-type': 'Income', 'costc-amount': 1800, 'costc-date': '2026-06-02', 'costc-status': 'In progress', 'costc-category': 'Client Revenue' } },
-  { id: 'costr-6', database_id: 'db-costs', position: 5, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'Freelance dev payment', 'costc-type': 'Expense', 'costc-amount': 800, 'costc-date': '2026-06-03', 'costc-status': 'Not started', 'costc-category': 'Freelance' } },
+  { id: 'costr-3', database_id: 'db-costs', position: 0, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'Adobe Creative Cloud', 'costc-amount': 60, 'costc-date': '2026-06-23', 'costc-status': 'Done', 'costc-category': 'SaaS', 'costc-company': 'Appercept', 'costc-frequency': 'Monthly' } },
+  { id: 'costr-4', database_id: 'db-costs', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'DigitalOcean hosting', 'costc-amount': 48, 'costc-date': '2026-05-01', 'costc-status': 'Done', 'costc-category': 'Tools', 'costc-company': 'Appercept', 'costc-frequency': 'Monthly' } },
+  { id: 'costr-7', database_id: 'db-costs', position: 2, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'Notion + Make subscriptions', 'costc-amount': 32, 'costc-date': '2026-06-15', 'costc-status': 'Done', 'costc-category': 'SaaS', 'costc-company': 'Appercept', 'costc-frequency': 'Monthly' } },
+  { id: 'costr-8', database_id: 'db-costs', position: 3, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'Accountant', 'costc-amount': 250, 'costc-date': '2026-06-10', 'costc-status': 'Done', 'costc-category': 'Tax', 'costc-company': 'Appercept', 'costc-frequency': 'Monthly' } },
+  { id: 'costr-9', database_id: 'db-costs', position: 4, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'Domain + SSL renewal', 'costc-amount': 120, 'costc-date': '2026-01-15', 'costc-status': 'Done', 'costc-category': 'Tools', 'costc-company': 'Appercept', 'costc-frequency': 'Yearly' } },
+  { id: 'costr-6', database_id: 'db-costs', position: 5, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'Freelance dev payment', 'costc-amount': 800, 'costc-date': '2026-06-03', 'costc-status': 'Not started', 'costc-category': 'Freelance', 'costc-company': 'Appercept', 'costc-frequency': 'One-time' } },
 ];
 
 // ─── PASSWORDS DATABASE ───────────────────────────────────────────────────────
@@ -292,6 +339,7 @@ export const DATABASES: Record<string, Database> = {
     ],
     default_view: 'dashboard'
   },
+  ...PRIVATE_TODO_DATABASES,
 };
 
 // ─── PAGE → DATABASE MAP ──────────────────────────────────────────────────────
@@ -309,6 +357,15 @@ export const PAGE_DB_MAP: Record<string, string> = {
 };
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+// ─── LOGIN ACCOUNTS ───────────────────────────────────────────────────────────
+// The admin account always exists so there's a way in. Others sign up and wait
+// for the admin to grant access.
+export const ACCOUNTS: Account[] = [
+  { id: 'acc-admin', name: 'Gašpar Bodulica', email: 'gaspar@appercept.net', password: 'appercept', approved: true, role: 'admin', initials: 'GB', color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'acc-2', name: 'Karlo Casni', email: 'kcasni@appercept.net', password: 'demo1234', approved: true, role: 'member', initials: 'KC', color: '#2ee89a', created_at: '2026-02-01T00:00:00Z' },
+  { id: 'acc-3', name: 'New Applicant', email: 'applicant@example.com', password: 'demo1234', approved: false, role: 'viewer', initials: 'NA', color: '#fb923c', created_at: '2026-06-02T10:00:00Z' },
+];
+
 export const NOTIFICATIONS: Notification[] = [
   { id: 'n-1', type: 'due_soon', title: 'Task due tomorrow', body: 'ClubCrowd FINAL is due Mar 13', row_id: 'tr-12', read: false, created_at: '2026-06-02T08:00:00Z' },
   { id: 'n-2', type: 'meeting_soon', title: 'Meeting in 15 minutes', body: 'Onboarding call with Medikal Lux at 09:30', row_id: 'mr-1', read: false, created_at: '2026-06-02T09:15:00Z' },

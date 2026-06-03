@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { Workspace, User } from '@/lib/types';
 import { PageIcon } from '@/lib/icons';
 import { PageEditPopover } from '@/components/PageEditPopover';
@@ -11,20 +11,29 @@ import {
   IconHome, IconPlus, IconChevronDown, IconSearch,
   IconPencil, IconChevronRight, IconSettings, IconBuilding,
   IconUsers, IconShield, IconUserPlus, IconExternalLink, IconLogout,
-  IconBriefcase, IconUpload, IconStar, IconStarFilled,
+  IconBriefcase, IconUpload, IconStar, IconStarFilled, IconLock,
 } from '@tabler/icons-react';
 
 export function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { pages, currentPageSlug, sidebarCollapsed, toggleSidebar, setCurrentPage, setCommandPaletteOpen, setNewPageModalOpen, updatePage, toggleFavorite, users, workspace } = useAppStore();
-  const favoritePages = pages.filter((p) => p.favorite);
-  const currentUser = users[0];
+  const { pages, currentPageSlug, sidebarCollapsed, toggleSidebar, setCurrentPage, setCommandPaletteOpen, setNewPageModalOpen, updatePage, toggleFavorite, movePage, currentUserId, users, workspace } = useAppStore();
+  // Pages the current user can see: shared (no owner) + their own private pages
+  const visiblePages = pages.filter((p) => !p.owner_id || p.owner_id === currentUserId);
+  const hqPages = visiblePages.filter((p) => !p.owner_id);
+  const privatePages = visiblePages.filter((p) => p.owner_id === currentUserId);
+  const favoritePages = visiblePages.filter((p) => p.favorite);
+  const account = useCurrentAccount();
+  const signOut = useAppStore((s) => s.signOut);
+  // The signed-in account is the current person; fall back to a workspace user.
+  const currentUser = account ?? users[0];
   const [editPageId, setEditPageId] = useState<string | null>(null);
   const [editAnchor, setEditAnchor] = useState<DOMRect | null>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [workspaceAnchor, setWorkspaceAnchor] = useState<DOMRect | null>(null);
   const [hqExpanded, setHqExpanded] = useState(true);
+  const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
+  const [dragOverPageId, setDragOverPageId] = useState<string | null>(null);
   const wsHeaderRef = useRef<HTMLDivElement>(null);
 
   const navigate = (slug: string) => {
@@ -72,29 +81,51 @@ export function Sidebar() {
         </div>
 
         {/* Expand button */}
-        <button onClick={toggleSidebar} style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
+        <button onClick={toggleSidebar} style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', marginBottom: 4 }}>
           <IconChevronRight size={16} />
         </button>
 
-        <div style={{ width: 1, height: 1, flexGrow: 1 }} />
+        <div style={{ width: 28, height: '0.5px', background: 'var(--color-border-subtle)', marginBottom: 6, flexShrink: 0 }} />
 
-        {/* Page icons */}
-        {pages.map((page) => {
-          const color = page.iconColor ?? '#4f6fff';
-          return (
-            <button key={page.id} onClick={() => navigate(page.slug)}
-              title={page.title}
-              style={{
-                width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                borderRadius: 6, border: 'none',
-                background: isActive(page.slug) ? `${color}22` : 'none',
-                color,
-                cursor: 'pointer', transition: 'all 100ms ease',
-              }}>
-              <PageIcon name={page.icon} size={16} />
-            </button>
-          );
-        })}
+        {/* Page icons — centered, scrollable */}
+        <div style={{ flex: 1, width: '100%', overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          {visiblePages.map((page) => {
+            const color = page.iconColor ?? '#4f6fff';
+            return (
+              <button key={page.id} onClick={() => navigate(page.slug)}
+                title={page.title}
+                style={{
+                  width: 36, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 8, border: 'none',
+                  background: isActive(page.slug) ? `${color}22` : 'none',
+                  color,
+                  cursor: 'pointer', transition: 'all 100ms ease',
+                }}
+                onMouseEnter={(e) => { if (!isActive(page.slug)) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+                onMouseLeave={(e) => { if (!isActive(page.slug)) e.currentTarget.style.background = 'none'; }}
+              >
+                <PageIcon name={page.icon} size={17} />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Settings + profile pinned at the bottom */}
+        <div style={{ width: 28, height: '0.5px', background: 'var(--color-border-subtle)', margin: '6px 0', flexShrink: 0 }} />
+        <button onClick={() => router.push('/settings')} title="Settings"
+          style={{ width: 36, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: 'none', background: isSettings ? 'var(--color-bg-active)' : 'none', color: isSettings ? 'var(--color-accent-bright)' : 'var(--color-text-muted)', cursor: 'pointer', marginBottom: 8 }}
+          onMouseEnter={(e) => { if (!isSettings) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+          onMouseLeave={(e) => { if (!isSettings) e.currentTarget.style.background = 'none'; }}
+        >
+          <IconSettings size={17} />
+        </button>
+        <div title={currentUser.name} style={{ marginBottom: 12, flexShrink: 0 }}>
+          {currentUser.avatar_url ? (
+            <img src={currentUser.avatar_url} alt={currentUser.initials} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
+          ) : (
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: currentUser.color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 11 }}>{currentUser.initials}</div>
+          )}
+        </div>
       </aside>
     );
   }
@@ -157,6 +188,7 @@ export function Sidebar() {
             headerRef={wsHeaderRef}
             onClose={() => setWorkspaceMenuOpen(false)}
             onNavigate={(path) => { setWorkspaceMenuOpen(false); router.push(path); }}
+            onSignOut={() => { setWorkspaceMenuOpen(false); signOut(); }}
           />
         )}
 
@@ -251,11 +283,21 @@ export function Sidebar() {
 
           {/* Pages */}
           {hqExpanded && <div style={{ paddingLeft: 4 }}>
-            {pages.map((page) => {
+            {hqPages.map((page) => {
               const active = isActive(page.slug);
               const color = page.iconColor ?? '#4f6fff';
+              const isDragOver = dragOverPageId === page.id && draggedPageId !== page.id;
               return (
-                <div key={page.id} style={{ position: 'relative' }}>
+                <div
+                  key={page.id}
+                  style={{ position: 'relative', borderTop: isDragOver ? '2px solid var(--color-accent-bright)' : '2px solid transparent', opacity: draggedPageId === page.id ? 0.4 : 1 }}
+                  draggable
+                  onDragStart={(e) => { setDraggedPageId(page.id); e.dataTransfer.effectAllowed = 'move'; }}
+                  onDragOver={(e) => { e.preventDefault(); if (draggedPageId && draggedPageId !== page.id) setDragOverPageId(page.id); }}
+                  onDragLeave={() => setDragOverPageId((cur) => (cur === page.id ? null : cur))}
+                  onDrop={(e) => { e.preventDefault(); if (draggedPageId && draggedPageId !== page.id) movePage(draggedPageId, page.id); setDraggedPageId(null); setDragOverPageId(null); }}
+                  onDragEnd={() => { setDraggedPageId(null); setDragOverPageId(null); }}
+                >
                   <div
                     style={{
                       display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px 3px 4px',
@@ -349,26 +391,46 @@ export function Sidebar() {
           </div>}
         </div>
 
-        {/* Private */}
-        <div className="section-header">Private</div>
+        {/* Private — the current user's private pages (only they can see these) */}
+        <div className="section-header" style={{ marginTop: 16 }}>Private</div>
+        {privatePages.map((page) => {
+          const active = isActive(page.slug);
+          const color = page.iconColor ?? '#4f6fff';
+          return (
+            <div key={page.id}
+              onClick={() => navigate(page.slug)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px 4px 6px',
+                borderRadius: 6, fontSize: 'var(--text-sm)', userSelect: 'none', cursor: 'pointer',
+                background: active ? 'var(--color-bg-active)' : 'transparent',
+                borderLeft: active ? `2px solid ${color}` : '2px solid transparent',
+                transition: 'background 100ms ease',
+              }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <span style={{ display: 'flex', color, flexShrink: 0 }}><PageIcon name={page.icon} size={14} /></span>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>{page.title}</span>
+              <IconLock size={11} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+            </div>
+          );
+        })}
         <NavItem icon={<IconPlus size={15} />} label="Add new" onClick={() => setNewPageModalOpen(true)} />
-
-        <div style={{ flex: 1 }} />
-
-        {/* Settings */}
-        <div style={{ borderTop: '0.5px solid var(--color-border-subtle)', paddingTop: 8, marginTop: 8 }}>
-          <NavItem
-            icon={<IconSettings size={15} />}
-            label="Settings"
-            active={isSettings}
-            onClick={() => router.push('/settings')}
-          />
-        </div>
       </nav>
 
-      {/* User footer */}
-      <div style={{ borderTop: '0.5px solid var(--color-border-subtle)', padding: '10px 12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '6px 8px', borderRadius: 6, transition: 'background 100ms ease' }}
+      {/* Pinned footer — Settings + profile (never scrolls) */}
+      <div style={{ borderTop: '0.5px solid var(--color-border-subtle)', padding: '8px 8px 4px', flexShrink: 0 }}>
+        <NavItem
+          icon={<IconSettings size={15} />}
+          label="Settings"
+          active={isSettings}
+          onClick={() => router.push('/settings')}
+        />
+      </div>
+      <div style={{ borderTop: '0.5px solid var(--color-border-subtle)', padding: '10px 12px', flexShrink: 0 }}>
+        <div
+          onClick={() => router.push('/settings')}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '6px 8px', borderRadius: 6, transition: 'background 100ms ease' }}
           onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
@@ -422,6 +484,7 @@ interface WorkspaceDropdownProps {
   headerRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void;
   onNavigate: (path: string) => void;
+  onSignOut: () => void;
 }
 
 const ROLE_COLOR: Record<string, { color: string; bg: string }> = {
@@ -430,7 +493,7 @@ const ROLE_COLOR: Record<string, { color: string; bg: string }> = {
   viewer: { color: '#6b7280', bg: '#6b728022' },
 };
 
-function WorkspaceDropdown({ workspace, users, anchor, headerRef, onClose, onNavigate }: WorkspaceDropdownProps) {
+function WorkspaceDropdown({ workspace, users, anchor, headerRef, onClose, onNavigate, onSignOut }: WorkspaceDropdownProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -573,7 +636,7 @@ function WorkspaceDropdown({ workspace, users, anchor, headerRef, onClose, onNav
         <button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 6, border: 'none', background: 'none', cursor: 'pointer' }}
           onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-          onClick={onClose}
+          onClick={onSignOut}
         >
           <span style={{ color: 'var(--color-text-muted)', display: 'flex' }}><IconLogout size={15} /></span>
           <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Log out</span>

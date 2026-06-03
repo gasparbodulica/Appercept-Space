@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Database, Row, Column, CellValue, Comment, Activity, Notification, Page, ViewConfig, Filter, Sort, User, Workspace } from './types';
-import { DATABASES, PAGES, USERS, WORKSPACE, COMMENTS, ACTIVITIES, NOTIFICATIONS } from './seed';
+import { Database, Row, Column, CellValue, Comment, Activity, Notification, Page, ViewConfig, Filter, Sort, User, Workspace, Account } from './types';
+import { DATABASES, PAGES, USERS, WORKSPACE, COMMENTS, ACTIVITIES, NOTIFICATIONS, ACCOUNTS } from './seed';
 
 interface AppState {
   // Core data
@@ -12,6 +12,10 @@ interface AppState {
   comments: Comment[];
   activities: Activity[];
   notifications: Notification[];
+
+  // Auth / access
+  accounts: Account[];
+  sessionAccountId: string | null;
 
   // UI state
   currentPageSlug: string;
@@ -46,6 +50,7 @@ interface AppState {
   // Actions — columns
   addColumn: (databaseId: string, column: Omit<Column, 'id'>) => void;
   updateColumn: (databaseId: string, columnId: string, updates: Partial<Column>) => void;
+  addColumnOption: (databaseId: string, columnId: string, label: string) => void;
   deleteColumn: (databaseId: string, columnId: string) => void;
   reorderColumns: (databaseId: string, fromIndex: number, toIndex: number) => void;
   resizeColumn: (databaseId: string, columnId: string, width: number) => void;
@@ -66,6 +71,15 @@ interface AppState {
 
   // Actions — pages
   reorderPages: (fromIndex: number, toIndex: number) => void;
+  movePage: (draggedId: string, targetId: string) => void;
+
+  // Actions — auth / access
+  signUp: (name: string, email: string, password: string) => { ok: boolean; error?: string };
+  signIn: (email: string, password: string) => { ok: boolean; error?: string };
+  signOut: () => void;
+  approveAccount: (id: string) => void;
+  revokeAccount: (id: string) => void;
+  deleteAccount: (id: string) => void;
 
   // Actions — users & workspace
   updateUser: (userId: string, updates: Partial<User>) => void;
@@ -91,6 +105,8 @@ export const useAppStore = create<AppState>()(
       databases: DATABASES,
       users: USERS,
       workspace: WORKSPACE,
+      accounts: ACCOUNTS,
+      sessionAccountId: null,
       comments: COMMENTS,
       activities: ACTIVITIES,
       notifications: NOTIFICATIONS,
@@ -275,6 +291,22 @@ export const useAppStore = create<AppState>()(
         });
       },
 
+      addColumnOption: (databaseId, columnId, label) => {
+        const palette = ['#1c75bc', '#2ee89a', '#a78bfa', '#fb923c', '#f472b6', '#00d2ff', '#f5c518', '#ff4f6a', '#60a5fa', '#2dd4bf'];
+        set((s) => {
+          const db = s.databases[databaseId];
+          if (!db) return s;
+          const columns = db.columns.map((c) => {
+            if (c.id !== columnId) return c;
+            const options = c.config.options ?? [];
+            if (options.some((o) => o.label.toLowerCase() === label.toLowerCase())) return c;
+            const newOpt = { id: generateId('opt'), label, color: palette[options.length % palette.length] };
+            return { ...c, config: { ...c.config, options: [...options, newOpt] } };
+          });
+          return { databases: { ...s.databases, [databaseId]: { ...db, columns } } };
+        });
+      },
+
       deleteColumn: (databaseId, columnId) => {
         set((s) => {
           const db = s.databases[databaseId];
@@ -379,6 +411,47 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ notifications: s.notifications.map((n) => ({ ...n, read: true })) }));
       },
 
+      // ── Auth / Access ──────────────────────────────────────────────────────
+      signUp: (name, email, password) => {
+        const e = email.trim().toLowerCase();
+        if (!name.trim() || !e || !password) return { ok: false, error: 'Please fill in every field.' };
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return { ok: false, error: 'Enter a valid email address.' };
+        if (password.length < 6) return { ok: false, error: 'Password must be at least 6 characters.' };
+        if (get().accounts.some((a) => a.email.toLowerCase() === e)) return { ok: false, error: 'An account with this email already exists.' };
+        const initials = name.trim().split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+        const palette = ['#1c75bc', '#2ee89a', '#a78bfa', '#fb923c', '#f472b6', '#00d2ff', '#f5c518', '#ff4f6a'];
+        const acc: Account = {
+          id: generateId('acc'),
+          name: name.trim(),
+          email: e,
+          password,
+          approved: false,
+          role: 'viewer',
+          initials,
+          color: palette[get().accounts.length % palette.length],
+          created_at: new Date().toISOString(),
+        };
+        set((s) => ({ accounts: [...s.accounts, acc], sessionAccountId: acc.id }));
+        return { ok: true };
+      },
+
+      signIn: (email, password) => {
+        const e = email.trim().toLowerCase();
+        const acc = get().accounts.find((a) => a.email.toLowerCase() === e);
+        if (!acc || acc.password !== password) return { ok: false, error: 'Incorrect email or password.' };
+        set({ sessionAccountId: acc.id });
+        return { ok: true };
+      },
+
+      signOut: () => set({ sessionAccountId: null }),
+
+      approveAccount: (id) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: true, role: a.role === 'viewer' ? 'member' : a.role } : a)) })),
+      revokeAccount: (id) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: false } : a)) })),
+      deleteAccount: (id) => set((s) => ({
+        accounts: s.accounts.filter((a) => a.id !== id),
+        sessionAccountId: s.sessionAccountId === id ? null : s.sessionAccountId,
+      })),
+
       // ── Users & Workspace ──────────────────────────────────────────────────
       updateUser: (userId, updates) => {
         set((s) => ({ users: s.users.map((u) => (u.id === userId ? { ...u, ...updates } : u)) }));
@@ -403,14 +476,30 @@ export const useAppStore = create<AppState>()(
           return { pages: pages.map((p, i) => ({ ...p, position: i })) };
         });
       },
+
+      movePage: (draggedId, targetId) => {
+        set((s) => {
+          if (draggedId === targetId) return s;
+          const pages = [...s.pages].sort((a, b) => a.position - b.position);
+          const from = pages.findIndex((p) => p.id === draggedId);
+          const to = pages.findIndex((p) => p.id === targetId);
+          if (from === -1 || to === -1) return s;
+          const [moved] = pages.splice(from, 1);
+          const insertAt = pages.findIndex((p) => p.id === targetId);
+          pages.splice(insertAt, 0, moved);
+          return { pages: pages.map((p, i) => ({ ...p, position: i })) };
+        });
+      },
     }),
     {
-      name: 'appercept-space-store-v5',
+      name: 'appercept-space-store-v11',
       partialize: (state) => ({
         databases: state.databases,
         pages: state.pages,
         users: state.users,
         workspace: state.workspace,
+        accounts: state.accounts,
+        sessionAccountId: state.sessionAccountId,
         comments: state.comments,
         activities: state.activities,
         notifications: state.notifications,
@@ -422,6 +511,7 @@ export const useAppStore = create<AppState>()(
       merge: (persisted: unknown, current) => {
         const p = persisted as Partial<AppState>;
         const persistedPages = p.pages ?? [];
+        const persistedAccounts = p.accounts ?? [];
         return {
           ...current,
           ...p,
@@ -435,6 +525,12 @@ export const useAppStore = create<AppState>()(
             ...PAGES.map((sp) => persistedPages.find((pp) => pp.id === sp.id) ?? sp),
             ...persistedPages.filter((pp) => !PAGES.some((sp) => sp.id === pp.id)),
           ],
+          // Seed accounts (admin always exists) with persisted state, plus signups.
+          accounts: [
+            ...ACCOUNTS.map((sa) => persistedAccounts.find((pa) => pa.id === sa.id) ?? sa),
+            ...persistedAccounts.filter((pa) => !ACCOUNTS.some((sa) => sa.id === pa.id)),
+          ],
+          sessionAccountId: p.sessionAccountId ?? null,
         };
       },
     }
@@ -461,6 +557,8 @@ export const useCurrentView = () => {
 
 export const useUsers = () => useAppStore((s) => s.users);
 export const useWorkspace = () => useAppStore((s) => s.workspace);
+export const useCurrentAccount = () =>
+  useAppStore((s) => s.accounts.find((a) => a.id === s.sessionAccountId) ?? null);
 
 export const useUnreadNotifications = () =>
   useAppStore((s) => s.notifications.filter((n) => !n.read).length);

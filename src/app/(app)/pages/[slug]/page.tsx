@@ -12,9 +12,21 @@ interface PageProps {
 
 export default function SlugPage({ params }: PageProps) {
   const { slug } = params;
-  const { pages, databases } = useAppStore();
+  const { pages, databases, currentUserId } = useAppStore();
 
   const page = pages.find((p) => p.slug === slug);
+  // Private pages are only visible to their owner
+  if (page && page.owner_id && page.owner_id !== currentUserId) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Topbar breadcrumb={['Private']} />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
+          <span style={{ fontSize: 32 }}>🔒</span>
+          <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-muted)' }}>This is a private page.</span>
+        </div>
+      </div>
+    );
+  }
   if (!page) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

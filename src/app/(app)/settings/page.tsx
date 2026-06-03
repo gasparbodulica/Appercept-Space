@@ -2,15 +2,15 @@
 
 import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { Topbar } from '@/components/layout/Topbar';
 import { User } from '@/lib/types';
 import {
   IconUser, IconBuilding, IconUsers, IconShield, IconUpload,
-  IconTrash, IconPlus, IconCheck, IconX, IconPencil,
+  IconTrash, IconPlus, IconCheck, IconX, IconPencil, IconKey, IconClock,
 } from '@tabler/icons-react';
 
-type Tab = 'profile' | 'general' | 'members' | 'roles';
+type Tab = 'profile' | 'general' | 'members' | 'roles' | 'access';
 
 const AVATAR_COLORS = [
   '#4f6fff', '#3ecf8e', '#a78bfa', '#2dd4bf',
@@ -39,10 +39,12 @@ export default function SettingsPage() {
 function SettingsContent() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>('profile');
+  const account = useCurrentAccount();
+  const isAdmin = account?.role === 'admin';
 
   useEffect(() => {
     const t = searchParams.get('tab') as Tab;
-    if (t && ['profile', 'general', 'members', 'roles'].includes(t)) {
+    if (t && ['profile', 'general', 'members', 'roles', 'access'].includes(t)) {
       setTab(t);
     }
   }, [searchParams]);
@@ -65,6 +67,11 @@ function SettingsContent() {
             <SettingsNavItem icon={<IconUsers size={14} />} label="Members" active={tab === 'members'} onClick={() => setTab('members')} />
             <SettingsNavItem icon={<IconShield size={14} />} label="Roles" active={tab === 'roles'} onClick={() => setTab('roles')} />
           </SettingsSection>
+          {isAdmin && (
+            <SettingsSection label="Admin">
+              <SettingsNavItem icon={<IconKey size={14} />} label="Access" active={tab === 'access'} onClick={() => setTab('access')} />
+            </SettingsSection>
+          )}
         </nav>
 
         {/* Content */}
@@ -74,6 +81,7 @@ function SettingsContent() {
             {tab === 'general' && <GeneralTab />}
             {tab === 'members' && <MembersTab />}
             {tab === 'roles' && <RolesTab />}
+            {tab === 'access' && (isAdmin ? <AccessTab /> : <RolesTab />)}
           </div>
         </div>
       </div>
@@ -424,6 +432,91 @@ function RolesTab() {
     </div>
   );
 }
+
+// ─── Access Tab (admin) ───────────────────────────────────────────────────────
+
+function AccessTab() {
+  const { accounts, approveAccount, revokeAccount, deleteAccount } = useAppStore();
+  const me = useCurrentAccount();
+  const pending = accounts.filter((a) => !a.approved);
+  const approved = accounts.filter((a) => a.approved);
+
+  return (
+    <div>
+      <PageHeader title="Access control" subtitle="Approve who can enter the workspace, or remove accounts. Only admins see this." />
+
+      {/* Pending requests */}
+      <div style={{ marginBottom: 24 }}>
+        <CardLabel>Pending requests {pending.length > 0 && `(${pending.length})`}</CardLabel>
+        <SettingsCard>
+          {pending.length === 0 && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', padding: '6px 0' }}>No pending requests.</div>}
+          {pending.map((a, i) => (
+            <div key={a.id}>
+              {i > 0 && <Divider />}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Avatar account={a} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-primary)' }}>{a.name}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{a.email} · requested {new Date(a.created_at).toLocaleDateString()}</div>
+                </div>
+                <button onClick={() => approveAccount(a.id)} style={approveBtn}><IconCheck size={13} /> Approve</button>
+                <button onClick={() => deleteAccount(a.id)} title="Delete account" style={iconDangerBtn}><IconTrash size={14} /></button>
+              </div>
+            </div>
+          ))}
+        </SettingsCard>
+      </div>
+
+      {/* Approved members */}
+      <div>
+        <CardLabel>People with access ({approved.length})</CardLabel>
+        <SettingsCard>
+          {approved.map((a, i) => (
+            <div key={a.id}>
+              {i > 0 && <Divider />}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Avatar account={a} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-primary)' }}>{a.name}</span>
+                    {a.id === me?.id && <span style={{ fontSize: 10, color: 'var(--color-text-muted)', background: 'var(--color-bg-active)', borderRadius: 4, padding: '1px 6px' }}>You</span>}
+                  </div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{a.email}</div>
+                </div>
+                <RoleBadge role={a.role} />
+                {a.role !== 'admin' && (
+                  <>
+                    <button onClick={() => revokeAccount(a.id)} title="Revoke access" style={ghostSmallBtn}>Revoke</button>
+                    <button onClick={() => deleteAccount(a.id)} title="Delete account" style={iconDangerBtn}><IconTrash size={14} /></button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </SettingsCard>
+      </div>
+    </div>
+  );
+}
+
+function Avatar({ account }: { account: { avatar_url?: string; color: string; initials: string } }) {
+  return account.avatar_url
+    ? <img src={account.avatar_url} alt={account.initials} style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+    : <div style={{ width: 34, height: 34, borderRadius: '50%', background: account.color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{account.initials}</div>;
+}
+
+const approveBtn: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 7, border: 'none',
+  background: 'var(--gradient-accent)', color: '#fff', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+};
+const ghostSmallBtn: React.CSSProperties = {
+  padding: '5px 11px', borderRadius: 7, border: '0.5px solid var(--color-border-default)', background: 'none',
+  color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+};
+const iconDangerBtn: React.CSSProperties = {
+  width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6,
+  border: 'none', background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', flexShrink: 0,
+};
 
 // ─── Shared UI helpers ────────────────────────────────────────────────────────
 

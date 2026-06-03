@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Column, Row, CellValue } from '@/lib/types';
 import { useAppStore } from '@/lib/store';
 import { formatDate, getStatusConfig, getPriorityConfig, getTagConfig, isOverdue } from '@/lib/utils';
-import { IconSearch, IconX } from '@tabler/icons-react';
+import { findCostsDb, companyMonthlyExpenses, findClientsDb, companyRevenue } from '@/lib/finance';
+import { IconSearch, IconX, IconPlus } from '@tabler/icons-react';
 
 interface CellProps {
   column: Column;
@@ -32,12 +33,15 @@ export function CellRenderer({ column, row, databaseId, isEditing, onStartEdit, 
     onStartEdit();
   }, [onStartEdit]);
 
+  // Formula columns are computed & read-only — never enter edit mode.
+  const editable = column.type !== 'formula';
+
   return (
     <div ref={containerRef} style={{ height: '100%', width: '100%' }}>
-      {isEditing ? (
+      {isEditing && editable ? (
         <EditCell column={column} value={value} onChange={handleChange} onBlur={onEndEdit} onTab={onTab} anchorRect={anchorRectRef.current} />
       ) : (
-        <DisplayCell column={column} row={row} databaseId={databaseId} value={value} onClick={handleStartEdit} />
+        <DisplayCell column={column} row={row} databaseId={databaseId} value={value} onClick={editable ? handleStartEdit : () => {}} />
       )}
     </div>
   );
@@ -55,7 +59,8 @@ function DisplayCell({ column, row, databaseId, value, onClick }: { column: Colu
   switch (column.type) {
     case 'status': {
       if (!value) return <div style={{ ...style, color: 'var(--color-text-muted)' }} onClick={onClick}><span style={{ fontSize: 'var(--text-xs)' }}>—</span></div>;
-      const cfg = getStatusConfig(String(value));
+      const custom = column.config.options?.find(o => o.label === String(value));
+      const cfg = custom ? { color: custom.color, bg: `${custom.color}22` } : getStatusConfig(String(value));
       return (
         <div style={style} onClick={onClick}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 20, background: cfg.bg, color: cfg.color, fontSize: 'var(--text-xs)', fontWeight: 500, whiteSpace: 'nowrap' }}>
@@ -67,7 +72,8 @@ function DisplayCell({ column, row, databaseId, value, onClick }: { column: Colu
     }
     case 'priority': {
       if (!value) return <div style={{ ...style, color: 'var(--color-text-muted)' }} onClick={onClick}><span style={{ fontSize: 'var(--text-xs)' }}>—</span></div>;
-      const cfg = getPriorityConfig(String(value));
+      const customP = column.config.options?.find(o => o.label === String(value));
+      const cfg = customP ? { color: customP.color, bg: `${customP.color}22` } : getPriorityConfig(String(value));
       return (
         <div style={style} onClick={onClick}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, background: cfg.bg, color: cfg.color, fontSize: 'var(--text-xs)', fontWeight: 500 }}>
@@ -94,7 +100,9 @@ function DisplayCell({ column, row, databaseId, value, onClick }: { column: Colu
       return (
         <div style={{ ...style, gap: 4, flexWrap: 'nowrap', overflow: 'hidden' }} onClick={onClick}>
           {(value as string[]).map(tag => {
-            const cfg = getTagConfig(tag);
+            // Prefer the column's own option colours; fall back to built-in tag colours
+            const opt = column.config.options?.find(o => o.label === tag);
+            const cfg = opt ? { color: opt.color, bg: `${opt.color}22` } : getTagConfig(tag);
             return <span key={tag} style={{ padding: '2px 7px', borderRadius: 20, background: cfg.bg, color: cfg.color, fontSize: 'var(--text-xs)', fontWeight: 500, flexShrink: 0 }}>{tag}</span>;
           })}
         </div>
@@ -159,6 +167,42 @@ function DisplayCell({ column, row, databaseId, value, onClick }: { column: Colu
       if (!value) return <div style={style} onClick={onClick} />;
       return <div style={style} onClick={onClick}><a href={`tel:${value}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', textDecoration: 'none' }}>{String(value)}</a></div>;
     }
+    case 'formula': {
+      const databases = useAppStore.getState().databases;
+      const db = databases[databaseId];
+      const nameCol = db?.columns.find(c => c.position === 0);
+      const companyName = nameCol ? String(row.cells[nameCol.id] ?? '') : '';
+      const prefix = column.config.prefix ?? '';
+      const revenue = companyRevenue(findClientsDb(databases), companyName);
+      const expenses = companyMonthlyExpenses(findCostsDb(databases), companyName);
+
+      // Monthly revenue (from clients, frequency-aware)
+      if (column.config.formula === 'company_revenue') {
+        if (revenue === 0) return <div style={{ ...style, justifyContent: 'flex-end', color: 'var(--color-text-muted)' }}><span style={{ fontSize: 'var(--text-xs)' }}>—</span></div>;
+        return (
+          <div style={{ ...style, justifyContent: 'flex-end', cursor: 'default', color: 'var(--color-teal)' }} title="Computed from clients (frequency-aware)">
+            <span style={{ fontWeight: 700 }}>{prefix}{revenue.toLocaleString()}</span>
+          </div>
+        );
+      }
+
+      // Monthly profit = revenue − expenses
+      if (column.config.formula === 'company_profit') {
+        if (revenue === 0 && expenses === 0) {
+          return <div style={{ ...style, justifyContent: 'flex-end', color: 'var(--color-text-muted)' }}><span style={{ fontSize: 'var(--text-xs)' }}>—</span></div>;
+        }
+        const profit = revenue - expenses;
+        const color = profit >= 0 ? 'var(--color-green)' : 'var(--color-red)';
+        return (
+          <div style={{ ...style, justifyContent: 'flex-end', cursor: 'default' }} title={`Revenue ${prefix}${revenue.toLocaleString()} − costs ${prefix}${expenses.toLocaleString()}`}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 9px', borderRadius: 20, background: `${profit >= 0 ? 'rgba(46,232,154,0.12)' : 'rgba(255,79,106,0.12)'}`, color, fontSize: 'var(--text-xs)', fontWeight: 700 }}>
+              {prefix}{profit.toLocaleString()}
+            </span>
+          </div>
+        );
+      }
+      return <div style={{ ...style, color: 'var(--color-text-muted)' }}><span style={{ fontSize: 'var(--text-xs)' }}>—</span></div>;
+    }
     default: {
       return (
         <div style={{ ...style, color: value ? 'var(--color-text-primary)' : 'var(--color-text-muted)' }} onClick={onClick}>
@@ -196,26 +240,32 @@ function EditCell({ column, value, onChange, onBlur, onTab, anchorRect }: {
     color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', fontFamily: 'var(--font-sans)',
   };
 
+  const addOpt = (label: string) => useAppStore.getState().addColumnOption(column.database_id, column.id, label);
+
   if (column.type === 'status') {
-    const opts = ['Not started','In progress','Started','Done','Completed','Blocked'];
-    return <SelectDropdown options={opts} value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect} getColor={getStatusConfig} />;
+    const builtIn = ['Not started','In progress','Started','Done','Completed','Blocked'];
+    const custom = (column.config.options ?? []).map(o => o.label).filter(l => !builtIn.includes(l));
+    return <SelectDropdown options={[...builtIn, ...custom]} value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect} getColor={getStatusConfig} getColorFromOptions={column.config.options} onCreate={addOpt} />;
   }
   if (column.type === 'priority') {
-    const opts = ['High','Medium','Low'];
-    return <SelectDropdown options={opts} value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect} getColor={getPriorityConfig} />;
+    const builtIn = ['High','Medium','Low'];
+    const custom = (column.config.options ?? []).map(o => o.label).filter(l => !builtIn.includes(l));
+    return <SelectDropdown options={[...builtIn, ...custom]} value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect} getColor={getPriorityConfig} getColorFromOptions={column.config.options} onCreate={addOpt} />;
   }
-  if (column.type === 'select' && column.config.options) {
-    return <SelectDropdown options={column.config.options.map(o => o.label)} value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect}
-      getColorFromOptions={column.config.options} />;
+  if (column.type === 'select') {
+    return <SelectDropdown options={(column.config.options ?? []).map(o => o.label)} value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect}
+      getColorFromOptions={column.config.options} onCreate={addOpt} />;
   }
   if (column.type === 'multi_select' || column.type === 'tags') {
+    const tagBuiltIn = ['IG','TT','LIN','Dev','Contract','Call','Info','PPTX'];
+    const customLabels = (column.config.options ?? []).map(o => o.label);
     const tagOpts = column.type === 'tags'
-      ? ['IG','TT','LIN','Dev','Contract','Call','Info','PPTX']
-      : (column.config.options?.map(o => o.label) ?? []);
+      ? [...tagBuiltIn, ...customLabels.filter(l => !tagBuiltIn.includes(l))]
+      : customLabels;
     const selected = Array.isArray(value) ? (value as string[]) : [];
     return <MultiSelectDropdown options={tagOpts} selected={selected} onChange={onChange} onClose={onBlur} anchorRect={anchorRect}
       getColor={column.type === 'tags' ? getTagConfig : undefined}
-      getColorFromOptions={column.type !== 'tags' ? column.config.options : undefined} />;
+      getColorFromOptions={column.config.options} onCreate={addOpt} />;
   }
   if (column.type === 'person') {
     return <PersonDropdown value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect} />;
@@ -279,7 +329,7 @@ function SearchInput({ value, onChange, placeholder = 'Search…' }: { value: st
 
 type ColorConfig = { color: string; bg: string; icon?: string };
 
-function SelectDropdown({ options, value, onChange, onClose, anchorRect, getColor, getColorFromOptions }: {
+function SelectDropdown({ options, value, onChange, onClose, anchorRect, getColor, getColorFromOptions, onCreate }: {
   options: string[];
   value: string;
   onChange: (v: CellValue) => void;
@@ -287,20 +337,24 @@ function SelectDropdown({ options, value, onChange, onClose, anchorRect, getColo
   anchorRect: DOMRect | null;
   getColor?: (v: string) => ColorConfig;
   getColorFromOptions?: { id: string; label: string; color: string }[];
+  onCreate?: (label: string) => void;
 }) {
   const [q, setQ] = useState('');
   const filtered = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options;
+  const exactMatch = options.some(o => o.toLowerCase() === q.trim().toLowerCase());
+  const canCreate = !!onCreate && q.trim().length > 0 && !exactMatch;
 
+  // Custom options (config.options) take priority for colours, then built-ins.
   const getOptColor = (opt: string): ColorConfig | undefined => {
-    if (getColor) return getColor(opt);
     const found = getColorFromOptions?.find(o => o.label === opt);
     if (found) return { color: found.color, bg: `${found.color}22` };
+    if (getColor) return getColor(opt);
     return undefined;
   };
 
   return (
     <DropdownPanel onClose={onClose} anchorRect={anchorRect}>
-      <SearchInput value={q} onChange={setQ} />
+      <SearchInput value={q} onChange={setQ} placeholder="Search or create…" />
       <div style={{ maxHeight: 240, overflowY: 'auto' }}>
         {filtered.map(opt => {
           const cfg = getOptColor(opt);
@@ -322,8 +376,18 @@ function SelectDropdown({ options, value, onChange, onClose, anchorRect, getColo
             </div>
           );
         })}
-        {filtered.length === 0 && <div style={{ padding: '14px', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textAlign: 'center' }}>No options</div>}
+        {filtered.length === 0 && !canCreate && <div style={{ padding: '14px', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textAlign: 'center' }}>No options</div>}
       </div>
+      {canCreate && (
+        <div onClick={() => { onCreate!(q.trim()); onChange(q.trim()); onClose(); }}
+          style={{ padding: '8px 12px', cursor: 'pointer', borderTop: '0.5px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: 7, fontSize: 'var(--text-sm)', color: 'var(--color-accent-bright)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          <IconPlus size={13} />
+          <span>Create <b style={{ color: 'var(--color-text-primary)' }}>&ldquo;{q.trim()}&rdquo;</b></span>
+        </div>
+      )}
       <div onClick={() => { onChange(null); onClose(); }}
         style={{ padding: '8px 12px', cursor: 'pointer', borderTop: '0.5px solid var(--color-border-subtle)', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}
         onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
@@ -335,7 +399,7 @@ function SelectDropdown({ options, value, onChange, onClose, anchorRect, getColo
 
 // ─── Multi-select dropdown ────────────────────────────────────────────────────
 
-function MultiSelectDropdown({ options, selected, onChange, onClose, anchorRect, getColor, getColorFromOptions }: {
+function MultiSelectDropdown({ options, selected, onChange, onClose, anchorRect, getColor, getColorFromOptions, onCreate }: {
   options: string[];
   selected: string[];
   onChange: (v: CellValue) => void;
@@ -343,9 +407,12 @@ function MultiSelectDropdown({ options, selected, onChange, onClose, anchorRect,
   anchorRect: DOMRect | null;
   getColor?: (v: string) => { color: string; bg: string };
   getColorFromOptions?: { id: string; label: string; color: string }[];
+  onCreate?: (label: string) => void;
 }) {
   const [q, setQ] = useState('');
   const filtered = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options;
+  const exactMatch = options.some(o => o.toLowerCase() === q.trim().toLowerCase());
+  const canCreate = !!onCreate && q.trim().length > 0 && !exactMatch;
 
   const toggle = (opt: string) => {
     const next = selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt];
@@ -353,9 +420,9 @@ function MultiSelectDropdown({ options, selected, onChange, onClose, anchorRect,
   };
 
   const getOptColor = (opt: string) => {
-    if (getColor) return getColor(opt);
     const found = getColorFromOptions?.find(o => o.label === opt);
     if (found) return { color: found.color, bg: `${found.color}22` };
+    if (getColor) return getColor(opt);
     return null;
   };
 
@@ -397,6 +464,16 @@ function MultiSelectDropdown({ options, selected, onChange, onClose, anchorRect,
           );
         })}
       </div>
+      {canCreate && (
+        <div onClick={() => { onCreate!(q.trim()); toggle(q.trim()); setQ(''); }}
+          style={{ padding: '8px 12px', cursor: 'pointer', borderTop: '0.5px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: 7, fontSize: 'var(--text-sm)', color: 'var(--color-accent-bright)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          <IconPlus size={13} />
+          <span>Create <b style={{ color: 'var(--color-text-primary)' }}>&ldquo;{q.trim()}&rdquo;</b></span>
+        </div>
+      )}
     </DropdownPanel>
   );
 }

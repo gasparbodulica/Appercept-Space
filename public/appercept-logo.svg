@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="320" height="80">
+  <defs>
+    <!-- Shifted x values by 148 to place grid in the center -->
+    <clipPath id="lc00"><rect x="148"  y="13" width="16" height="16" rx="4"/></clipPath>
+    <clipPath id="lc10"><rect x="167" y="13" width="16" height="16" rx="4"/></clipPath>
+    <clipPath id="lc20"><rect x="186" y="13" width="16" height="16" rx="4"/></clipPath>
+    <clipPath id="lc01"><rect x="148"  y="32" width="16" height="16" rx="4"/></clipPath>
+    <clipPath id="lc11"><rect x="167" y="32" width="16" height="16" rx="4"/></clipPath>
+    <clipPath id="lc21"><rect x="186" y="32" width="16" height="16" rx="4"/></clipPath>
+    <clipPath id="lc02"><rect x="148"  y="51" width="16" height="16" rx="4"/></clipPath>
+    <clipPath id="lc12"><rect x="167" y="51" width="16" height="16" rx="4"/></clipPath>
+    <clipPath id="lc22"><rect x="186" y="51" width="16" height="16" rx="4"/></clipPath>
+  </defs>
+
+  <!-- 3x3 icon grid centered -->
+  <!-- Row 0 -->
+  <rect x="148"  y="13" width="16" height="16" rx="4" fill="#1E318C"/>
+  <circle cx="164" cy="29" r="13" fill="#1c75bc" clip-path="url(#lc00)"/>
+  <rect x="167" y="13" width="16" height="16" rx="4" fill="#1E318C"/>
+  <rect x="167" y="21" width="16" height="8"  fill="#1c75bc" clip-path="url(#lc10)"/>
+  <rect x="186" y="13" width="16" height="16" rx="4" fill="#1c75bc"/>
+  <circle cx="202" cy="13" r="13" fill="#1E318C" clip-path="url(#lc20)"/>
+  <!-- Row 1 -->
+  <rect x="148"  y="32" width="16" height="16" rx="4" fill="#1E318C"/>
+  <rect x="156"  y="32" width="8"  height="16" fill="#1c75bc" clip-path="url(#lc01)"/>
+  <rect x="167" y="32" width="16" height="16" rx="4" fill="#1E318C"/>
+  <rect x="186" y="32" width="16" height="16" rx="4" fill="#1E318C"/>
+  <rect x="186" y="32" width="8"  height="16" fill="#1c75bc" clip-path="url(#lc21)"/>
+  <!-- Row 2 -->
+  <rect x="148"  y="51" width="16" height="16" rx="4" fill="#1c75bc"/>
+  <circle cx="148" cy="67" r="13" fill="#1E318C" clip-path="url(#lc02)"/>
+  <rect x="167" y="51" width="16" height="16" rx="4" fill="#1E318C"/>
+  <rect x="167" y="51" width="16" height="8"  fill="#1c75bc" clip-path="url(#lc12)"/>
+  <rect x="186" y="51" width="16" height="16" rx="4" fill="#1E318C"/>
+  <circle cx="186" cy="51" r="13" fill="#1c75bc" clip-path="url(#lc22)"/>
+
+  <!-- Left: APPER, Right: EPT -->
+  <text x="10" y="52" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="34" fill="#1c75bc" letter-spacing="1">APPER</text>
+  <text x="212" y="52" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="34" fill="#1c75bc" letter-spacing="1">EPT</text>
+</svg>

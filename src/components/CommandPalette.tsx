@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/lib/store';
+import { PageIcon } from '@/lib/icons';
 import { IconSearch, IconX } from '@tabler/icons-react';
 
 interface SearchResult {
@@ -40,7 +41,7 @@ export function CommandPalette() {
   if (!query) {
     // Quick actions
     results.push(
-      { id: 'dashboard', icon: '🏠', title: 'Go to Dashboard', subtitle: 'Home', action: () => { router.push('/dashboard'); setCommandPaletteOpen(false); } },
+      { id: 'dashboard', icon: 'IconHome', title: 'Go to Dashboard', subtitle: 'Home', action: () => { router.push('/dashboard'); setCommandPaletteOpen(false); } },
       ...pages.map((p) => ({ id: p.id, icon: p.icon, title: p.title, subtitle: 'Page', action: () => navigate(p.slug) })),
     );
   } else {
@@ -145,7 +146,9 @@ export function CommandPalette() {
                   }}
                   onMouseEnter={() => setSelectedIdx(i)}
                 >
-                  <span style={{ fontSize: 16, flexShrink: 0 }}>{result.icon}</span>
+                  <span style={{ display: 'flex', flexShrink: 0, color: 'var(--color-text-muted)' }}>
+                    <PageIcon name={result.icon} size={16} />
+                  </span>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <div style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result.title}</div>
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{result.subtitle}</div>

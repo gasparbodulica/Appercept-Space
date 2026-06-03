@@ -1,8 +1,10 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/lib/store';
 import { USERS } from '@/lib/seed';
 import { Topbar } from '@/components/layout/Topbar';
+import { IconCircleCheck, IconCircleFilled, IconCalendar, IconFileText, IconCurrencyEuro } from '@tabler/icons-react';
 import { getStatusConfig, getPriorityConfig, formatDate, formatDateTime, isOverdue } from '@/lib/utils';
 
 const GREETING_ICON = () => {
@@ -15,6 +17,7 @@ const GREETING_ICON = () => {
 const TODAY = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { databases, pages } = useAppStore();
   const currentUser = USERS[0];
 
@@ -147,10 +150,12 @@ export default function DashboardPage() {
                         {time || '—'}{duration ? ` · ${duration} min` : ''}
                       </div>
                     </div>
-                    <button style={{
-                      padding: '4px 10px', borderRadius: 6, border: '0.5px solid var(--color-border-default)',
-                      background: 'none', color: 'var(--color-accent)', fontSize: 'var(--text-xs)', cursor: 'pointer', fontWeight: 500,
-                    }}>Join</button>
+                    <button
+                      onClick={() => router.push('/pages/meetings')}
+                      style={{
+                        padding: '4px 10px', borderRadius: 6, border: '0.5px solid var(--color-border-default)',
+                        background: 'none', color: 'var(--color-accent)', fontSize: 'var(--text-xs)', cursor: 'pointer', fontWeight: 500,
+                      }}>Join</button>
                   </div>
                 );
               })
@@ -215,14 +220,14 @@ export default function DashboardPage() {
           {/* Recent activity */}
           <Section title="Recent activity">
             {[
-              { icon: '✅', text: 'Invoice paid · Medikal Lux', time: '2h ago' },
-              { icon: '🔵', text: 'ClubCrowd FINAL milestone completed', time: '5h ago' },
-              { icon: '🟡', text: 'Proposal sent · GymBros', time: 'Yesterday' },
-              { icon: '📅', text: 'Meeting: Brand strategy review', time: 'Yesterday' },
-              { icon: '📝', text: 'Appercept Invoice Template updated', time: '2d ago' },
+              { icon: <IconCircleCheck size={14} style={{ color: 'var(--color-green)' }} />, text: 'Invoice paid · Medikal Lux', time: '2h ago' },
+              { icon: <IconCircleFilled size={14} style={{ color: 'var(--color-accent)' }} />, text: 'ClubCrowd FINAL milestone completed', time: '5h ago' },
+              { icon: <IconCircleFilled size={14} style={{ color: 'var(--color-amber)' }} />, text: 'Proposal sent · GymBros', time: 'Yesterday' },
+              { icon: <IconCalendar size={14} style={{ color: 'var(--color-teal)' }} />, text: 'Meeting: Brand strategy review', time: 'Yesterday' },
+              { icon: <IconFileText size={14} style={{ color: 'var(--color-text-muted)' }} />, text: 'Appercept Invoice Template updated', time: '2d ago' },
             ].map((item, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '0.5px solid var(--color-border-subtle)' }}>
-                <span style={{ fontSize: 14, flexShrink: 0 }}>{item.icon}</span>
+                <span style={{ display: 'flex', flexShrink: 0 }}>{item.icon}</span>
                 <span style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{item.text}</span>
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', flexShrink: 0 }}>{item.time}</span>
               </div>

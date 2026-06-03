@@ -56,6 +56,7 @@ export function isOverdue(dateStr: string | null | undefined): boolean {
 export function getStatusConfig(status: string): { color: string; bg: string; icon: string } {
   switch (status as StatusValue) {
     case 'Done':        return { color: 'var(--color-green)',  bg: 'var(--color-green-bg)',  icon: '✓' };
+    case 'Completed':   return { color: 'var(--color-green)',  bg: 'var(--color-green-bg)',  icon: '✓' };
     case 'In progress': return { color: 'var(--color-amber)',  bg: 'var(--color-amber-bg)',  icon: '◐' };
     case 'Started':     return { color: 'var(--color-orange)', bg: 'var(--color-orange-bg)', icon: '▶' };
     case 'Blocked':     return { color: 'var(--color-red)',    bg: 'var(--color-red-bg)',    icon: '✕' };

@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Database, Row, Column, CellValue, Comment, Activity, Notification, Page, ViewConfig, Filter, Sort } from './types';
+import { Database, Row, Column, CellValue, Comment, Activity, Notification, Page, ViewConfig, Filter, Sort, User, Workspace } from './types';
 import { DATABASES, PAGES, USERS, WORKSPACE, COMMENTS, ACTIVITIES, NOTIFICATIONS } from './seed';
 
 interface AppState {
   // Core data
   pages: Page[];
   databases: Record<string, Database>;
+  users: User[];
+  workspace: Workspace;
   comments: Comment[];
   activities: Activity[];
   notifications: Notification[];
@@ -18,6 +20,7 @@ interface AppState {
   openRowId: string | null;
   openDatabaseId: string | null;
   commandPaletteOpen: boolean;
+  newPageModalOpen: boolean;
   currentUserId: string;
 
   // Actions — navigation
@@ -27,6 +30,11 @@ interface AppState {
   openRow: (rowId: string, databaseId: string) => void;
   closeRow: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
+  setNewPageModalOpen: (open: boolean) => void;
+  addPage: (title: string, iconName: string, iconColor?: string) => Page;
+  updatePage: (pageId: string, updates: Partial<Pick<Page, 'title' | 'icon' | 'iconColor'>>) => void;
+  toggleFavorite: (pageId: string) => void;
+  createDatabaseForPage: (pageId: string) => Database;
 
   // Actions — rows
   addRow: (databaseId: string) => Row;
@@ -43,7 +51,7 @@ interface AppState {
   resizeColumn: (databaseId: string, columnId: string, width: number) => void;
 
   // Actions — views
-  addView: (databaseId: string, view: Omit<ViewConfig, 'id'>) => void;
+  addView: (databaseId: string, view: Omit<ViewConfig, 'id'>) => ViewConfig;
   updateView: (databaseId: string, viewId: string, updates: Partial<ViewConfig>) => void;
   deleteView: (databaseId: string, viewId: string) => void;
   setFilter: (databaseId: string, viewId: string, filters: Filter[]) => void;
@@ -58,6 +66,12 @@ interface AppState {
 
   // Actions — pages
   reorderPages: (fromIndex: number, toIndex: number) => void;
+
+  // Actions — users & workspace
+  updateUser: (userId: string, updates: Partial<User>) => void;
+  updateWorkspace: (updates: Partial<Workspace>) => void;
+  addMember: (member: Omit<User, 'id' | 'workspace_id'>) => void;
+  removeMember: (userId: string) => void;
 }
 
 let rowCounter = 10000;
@@ -75,6 +89,8 @@ export const useAppStore = create<AppState>()(
       // ── Initial State ──────────────────────────────────────────────────────
       pages: PAGES,
       databases: DATABASES,
+      users: USERS,
+      workspace: WORKSPACE,
       comments: COMMENTS,
       activities: ACTIVITIES,
       notifications: NOTIFICATIONS,
@@ -84,6 +100,7 @@ export const useAppStore = create<AppState>()(
       openRowId: null,
       openDatabaseId: null,
       commandPaletteOpen: false,
+      newPageModalOpen: false,
       currentUserId: 'u-1',
 
       // ── Navigation ─────────────────────────────────────────────────────────
@@ -93,6 +110,70 @@ export const useAppStore = create<AppState>()(
       openRow: (rowId, databaseId) => set({ openRowId: rowId, openDatabaseId: databaseId }),
       closeRow: () => set({ openRowId: null, openDatabaseId: null }),
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+      setNewPageModalOpen: (open) => set({ newPageModalOpen: open }),
+
+      addPage: (title, iconName, iconColor) => {
+        const slug = title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Date.now().toString(36);
+        const page: Page = {
+          id: generateId('page'),
+          workspace_id: get().workspace.id,
+          title,
+          icon: iconName,
+          iconColor: iconColor ?? '#4f6fff',
+          type: 'custom',
+          position: get().pages.length,
+          slug,
+        };
+        set((s) => ({ pages: [...s.pages, page] }));
+        return page;
+      },
+
+      updatePage: (pageId, updates) => {
+        set((s) => ({ pages: s.pages.map((p) => (p.id === pageId ? { ...p, ...updates } : p)) }));
+      },
+
+      toggleFavorite: (pageId) => {
+        set((s) => ({ pages: s.pages.map((p) => (p.id === pageId ? { ...p, favorite: !p.favorite } : p)) }));
+      },
+
+      createDatabaseForPage: (pageId) => {
+        // Return existing database if one already exists for this page
+        const existing = Object.values(get().databases).find((d) => d.page_id === pageId);
+        if (existing) return existing;
+
+        const page = get().pages.find((p) => p.id === pageId);
+        const dbId = generateId('db');
+        const nameColId = generateId('col');
+        const statusColId = generateId('col');
+        const dateColId = generateId('col');
+        const viewId = generateId('view');
+        const now = new Date().toISOString();
+        const uid = get().currentUserId;
+
+        const mkRow = (pos: number): Row => ({
+          id: generateId('row'), database_id: dbId, position: pos,
+          created_by: uid, created_at: now, updated_at: now, cells: {},
+        });
+
+        const db: Database = {
+          id: dbId,
+          page_id: pageId,
+          name: page?.title ?? 'Table',
+          columns: [
+            { id: nameColId,   database_id: dbId, name: 'Name',   type: 'text',   position: 0, config: {}, hidden: false, width: 280 },
+            { id: statusColId, database_id: dbId, name: 'Status', type: 'status', position: 1, config: {}, hidden: false, width: 150 },
+            { id: dateColId,   database_id: dbId, name: 'Date',   type: 'date',   position: 2, config: {}, hidden: false, width: 130 },
+          ],
+          rows: [mkRow(0), mkRow(1), mkRow(2)],
+          views: [
+            { id: viewId, database_id: dbId, name: 'Table', type: 'table', icon: '☰', filters: [], sorts: [], hidden_cols: [], is_default: true },
+          ],
+          default_view: 'table',
+        };
+
+        set((s) => ({ databases: { ...s.databases, [dbId]: db } }));
+        return db;
+      },
 
       // ── Rows ───────────────────────────────────────────────────────────────
       addRow: (databaseId) => {
@@ -231,10 +312,10 @@ export const useAppStore = create<AppState>()(
 
       // ── Views ──────────────────────────────────────────────────────────────
       addView: (databaseId, view) => {
+        const newView: ViewConfig = { ...view, id: generateId('view') };
         set((s) => {
           const db = s.databases[databaseId];
           if (!db) return s;
-          const newView: ViewConfig = { ...view, id: generateId('view') };
           return {
             databases: {
               ...s.databases,
@@ -242,6 +323,7 @@ export const useAppStore = create<AppState>()(
             },
           };
         });
+        return newView;
       },
 
       updateView: (databaseId, viewId, updates) => {
@@ -297,6 +379,21 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ notifications: s.notifications.map((n) => ({ ...n, read: true })) }));
       },
 
+      // ── Users & Workspace ──────────────────────────────────────────────────
+      updateUser: (userId, updates) => {
+        set((s) => ({ users: s.users.map((u) => (u.id === userId ? { ...u, ...updates } : u)) }));
+      },
+      updateWorkspace: (updates) => {
+        set((s) => ({ workspace: { ...s.workspace, ...updates } }));
+      },
+      addMember: (member) => {
+        const newUser: User = { ...member, id: generateId('user'), workspace_id: get().workspace.id };
+        set((s) => ({ users: [...s.users, newUser] }));
+      },
+      removeMember: (userId) => {
+        set((s) => ({ users: s.users.filter((u) => u.id !== userId) }));
+      },
+
       // ── Pages ──────────────────────────────────────────────────────────────
       reorderPages: (fromIndex, toIndex) => {
         set((s) => {
@@ -308,16 +405,38 @@ export const useAppStore = create<AppState>()(
       },
     }),
     {
-      name: 'appercept-space-store',
+      name: 'appercept-space-store-v5',
       partialize: (state) => ({
         databases: state.databases,
         pages: state.pages,
+        users: state.users,
+        workspace: state.workspace,
         comments: state.comments,
         activities: state.activities,
         notifications: state.notifications,
         sidebarCollapsed: state.sidebarCollapsed,
         currentUserId: state.currentUserId,
       }),
+      // Always merge seed databases & pages over persisted data so new
+      // entries added in seed.ts are never silently missing after a deploy.
+      merge: (persisted: unknown, current) => {
+        const p = persisted as Partial<AppState>;
+        const persistedPages = p.pages ?? [];
+        return {
+          ...current,
+          ...p,
+          // Start from seed so newly-shipped seed databases always appear,
+          // then let persisted data win so the user's edits (columns, rows,
+          // renames) AND user-created databases are preserved.
+          databases: { ...DATABASES, ...(p.databases ?? {}) },
+          // Seed pages keep their slot/order but adopt any persisted edits
+          // (rename/icon/colour); user-created pages are appended after.
+          pages: [
+            ...PAGES.map((sp) => persistedPages.find((pp) => pp.id === sp.id) ?? sp),
+            ...persistedPages.filter((pp) => !PAGES.some((sp) => sp.id === pp.id)),
+          ],
+        };
+      },
     }
   )
 );
@@ -340,8 +459,8 @@ export const useCurrentView = () => {
   return db.views.find((v) => v.id === currentViewId) ?? db.views[0] ?? null;
 };
 
-export const useUsers = () => USERS;
-export const useWorkspace = () => WORKSPACE;
+export const useUsers = () => useAppStore((s) => s.users);
+export const useWorkspace = () => useAppStore((s) => s.workspace);
 
 export const useUnreadNotifications = () =>
   useAppStore((s) => s.notifications.filter((n) => !n.read).length);

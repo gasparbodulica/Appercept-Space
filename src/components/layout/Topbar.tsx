@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAppStore, useUnreadNotifications } from '@/lib/store';
 import { formatRelativeTime } from '@/lib/utils';
-import { IconShare, IconStar, IconDots, IconBell, IconBellFilled, IconPlus, IconLayoutSidebar } from '@tabler/icons-react';
+import { IconShare, IconStar, IconStarFilled, IconDots, IconBell, IconBellFilled, IconPlus, IconLayoutSidebar, IconLink, IconDownload, IconTrash } from '@tabler/icons-react';
 
 interface TopbarProps {
   breadcrumb?: string[];
@@ -13,13 +13,24 @@ interface TopbarProps {
 
 export function Topbar({ breadcrumb = [], pageTitle }: TopbarProps) {
   const {
-    sidebarCollapsed, toggleSidebar, setCommandPaletteOpen,
+    sidebarCollapsed, toggleSidebar, setCommandPaletteOpen, setNewPageModalOpen,
     notifications, markAllNotificationsRead, markNotificationRead,
   } = useAppStore();
+  const pathname = usePathname();
   const unread = useUnreadNotifications();
   const [notifOpen, setNotifOpen] = useState(false);
+  const [starred, setStarred] = useState(false);
+  const [dotsOpen, setDotsOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const crumbs = breadcrumb.length > 0 ? breadcrumb : ["Appercept's Space HQ", pageTitle ?? ''].filter(Boolean);
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    });
+  };
 
   return (
     <header style={{
@@ -51,17 +62,64 @@ export function Topbar({ breadcrumb = [], pageTitle }: TopbarProps) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginRight: 4 }}>Edited Jun 2</span>
 
-        <button className="btn-ghost" style={{ padding: '4px 8px', fontSize: 'var(--text-xs)', gap: 4 }} aria-label="Share">
-          <IconShare size={14} /> Share
+        <button
+          onClick={handleShare}
+          className="btn-ghost"
+          style={{ padding: '4px 8px', fontSize: 'var(--text-xs)', gap: 4, color: shareCopied ? 'var(--color-green)' : undefined }}
+          aria-label="Share"
+        >
+          <IconShare size={14} /> {shareCopied ? 'Copied!' : 'Share'}
         </button>
 
-        <button className="btn-ghost" style={{ padding: '4px 6px' }} aria-label="Favorite">
-          <IconStar size={15} />
+        <button
+          onClick={() => setStarred((s) => !s)}
+          className="btn-ghost"
+          style={{ padding: '4px 6px', color: starred ? 'var(--color-yellow, #f5c518)' : undefined }}
+          aria-label="Favorite"
+        >
+          {starred ? <IconStarFilled size={15} style={{ color: 'var(--color-yellow, #f5c518)' }} /> : <IconStar size={15} />}
         </button>
 
-        <button className="btn-ghost" style={{ padding: '4px 6px' }} aria-label="More options">
-          <IconDots size={15} />
-        </button>
+        {/* More options */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setDotsOpen((o) => !o)}
+            className="btn-ghost"
+            style={{ padding: '4px 6px' }}
+            aria-label="More options"
+          >
+            <IconDots size={15} />
+          </button>
+
+          {dotsOpen && (
+            <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setDotsOpen(false)} />
+              <div style={{
+                position: 'absolute', right: 0, top: 'calc(100% + 8px)', width: 200, zIndex: 50,
+                background: 'var(--color-bg-surface)', border: '0.5px solid var(--color-border-default)',
+                borderRadius: 'var(--card-radius)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                overflow: 'hidden', padding: '4px',
+              }}>
+                {[
+                  { icon: <IconLink size={14} />, label: 'Copy link', action: handleShare },
+                  { icon: <IconDownload size={14} />, label: 'Export as CSV', action: () => {} },
+                ].map((item) => (
+                  <button key={item.label} onClick={() => { item.action(); setDotsOpen(false); }} style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px',
+                    borderRadius: 6, border: 'none', background: 'none', color: 'var(--color-text-secondary)',
+                    fontSize: 'var(--text-sm)', cursor: 'pointer', textAlign: 'left',
+                  }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                  >
+                    <span style={{ color: 'var(--color-text-muted)' }}>{item.icon}</span>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Notifications bell */}
         <div style={{ position: 'relative' }}>
@@ -124,7 +182,7 @@ export function Topbar({ breadcrumb = [], pageTitle }: TopbarProps) {
 
         {/* New button */}
         <button
-          onClick={() => {}}
+          onClick={() => setNewPageModalOpen(true)}
           style={{
             display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
             borderRadius: 6, border: 'none', background: 'var(--gradient-accent)',

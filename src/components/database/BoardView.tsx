@@ -1,8 +1,8 @@
 'use client';
 
-import { Database, Row } from '@/lib/types';
+import { Database, Row, ViewConfig } from '@/lib/types';
 import { useAppStore } from '@/lib/store';
-import { getStatusConfig, getPriorityConfig, getTagConfig, formatDate, isOverdue } from '@/lib/utils';
+import { getStatusConfig, getPriorityConfig, getTagConfig, formatDate, isOverdue, applyCellFilter } from '@/lib/utils';
 import { USERS } from '@/lib/seed';
 import { IconPlus } from '@tabler/icons-react';
 
@@ -10,9 +10,10 @@ const STATUS_COLUMNS = ['Not started', 'In progress', 'Started', 'Done', 'Blocke
 
 interface BoardViewProps {
   database: Database;
+  view: ViewConfig;
 }
 
-export function BoardView({ database }: BoardViewProps) {
+export function BoardView({ database, view }: BoardViewProps) {
   const { addRow, updateCell, openRow } = useAppStore();
 
   const statusCol = database.columns.find((c) => c.type === 'status');
@@ -22,8 +23,14 @@ export function BoardView({ database }: BoardViewProps) {
   const dateCol = database.columns.find((c) => c.type === 'date' || c.type === 'date_range');
   const tagsCol = database.columns.find((c) => c.type === 'tags' || c.type === 'multi_select');
 
+  // Apply view filters (excluding the status column filter since board is already grouped by it)
+  const filteredRows = database.rows.filter(row => {
+    const filters = (view.filters ?? []).filter(f => f.column_id !== statusCol?.id);
+    return filters.every(f => applyCellFilter(row.cells[f.column_id] ?? null, f.operator, f.value));
+  });
+
   const getRowsForStatus = (status: string): Row[] => {
-    return database.rows.filter((r) => {
+    return filteredRows.filter((r) => {
       const val = statusCol ? r.cells[statusCol.id] : null;
       return (val ?? 'Not started') === status;
     });

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <defs>
+    <clipPath id="cc00"><rect x="0"  y="0"  width="28" height="28" rx="7"/></clipPath>
+    <clipPath id="cc10"><rect x="34" y="0"  width="28" height="28" rx="7"/></clipPath>
+    <clipPath id="cc20"><rect x="68" y="0"  width="28" height="28" rx="7"/></clipPath>
+    <clipPath id="cc01"><rect x="0"  y="34" width="28" height="28" rx="7"/></clipPath>
+    <clipPath id="cc11"><rect x="34" y="34" width="28" height="28" rx="7"/></clipPath>
+    <clipPath id="cc21"><rect x="68" y="34" width="28" height="28" rx="7"/></clipPath>
+    <clipPath id="cc02"><rect x="0"  y="68" width="28" height="28" rx="7"/></clipPath>
+    <clipPath id="cc12"><rect x="34" y="68" width="28" height="28" rx="7"/></clipPath>
+    <clipPath id="cc22"><rect x="68" y="68" width="28" height="28" rx="7"/></clipPath>
+  </defs>
+
+  <!-- Row 0 -->
+  <!-- (0,0) dark bg + light arc from bottom-right -->
+  <rect x="0"  y="0"  width="28" height="28" rx="7" fill="#1E318C"/>
+  <circle cx="28" cy="28" r="22" fill="#3F82CC" clip-path="url(#cc00)"/>
+
+  <!-- (1,0) dark bg + light bottom half -->
+  <rect x="34" y="0"  width="28" height="28" rx="7" fill="#1E318C"/>
+  <rect x="34" y="14" width="28" height="14" fill="#3F82CC" clip-path="url(#cc10)"/>
+
+  <!-- (2,0) light bg + dark arc at top-right corner -->
+  <rect x="68" y="0"  width="28" height="28" rx="7" fill="#3F82CC"/>
+  <circle cx="96" cy="0" r="22" fill="#1E318C" clip-path="url(#cc20)"/>
+
+  <!-- Row 1 -->
+  <!-- (0,1) dark bg + light right half -->
+  <rect x="0"  y="34" width="28" height="28" rx="7" fill="#1E318C"/>
+  <rect x="14" y="34" width="14" height="28" fill="#3F82CC" clip-path="url(#cc01)"/>
+
+  <!-- (1,1) solid dark center -->
+  <rect x="34" y="34" width="28" height="28" rx="7" fill="#1E318C"/>
+
+  <!-- (2,1) dark bg + light left half -->
+  <rect x="68" y="34" width="28" height="28" rx="7" fill="#1E318C"/>
+  <rect x="68" y="34" width="14" height="28" fill="#3F82CC" clip-path="url(#cc21)"/>
+
+  <!-- Row 2 -->
+  <!-- (0,2) light bg + dark arc at bottom-left corner -->
+  <rect x="0"  y="68" width="28" height="28" rx="7" fill="#3F82CC"/>
+  <circle cx="0" cy="96" r="22" fill="#1E318C" clip-path="url(#cc02)"/>
+
+  <!-- (1,2) dark bg + light top half -->
+  <rect x="34" y="68" width="28" height="28" rx="7" fill="#1E318C"/>
+  <rect x="34" y="68" width="28" height="14" fill="#3F82CC" clip-path="url(#cc12)"/>
+
+  <!-- (2,2) dark bg + light arc from top-left -->
+  <rect x="68" y="68" width="28" height="28" rx="7" fill="#1E318C"/>
+  <circle cx="68" cy="68" r="22" fill="#3F82CC" clip-path="url(#cc22)"/>
+</svg>

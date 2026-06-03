@@ -4,7 +4,7 @@ export type ColumnType =
   | 'date' | 'date_range' | 'person' | 'relation' | 'url' | 'email'
   | 'phone' | 'checkbox' | 'file' | 'formula' | 'tags';
 
-export type StatusValue = 'Not started' | 'In progress' | 'Started' | 'Done' | 'Blocked';
+export type StatusValue = 'Not started' | 'In progress' | 'Started' | 'Done' | 'Completed' | 'Blocked';
 export type PriorityValue = 'High' | 'Medium' | 'Low';
 
 export interface SelectOption {
@@ -51,11 +51,13 @@ export interface Page {
   parent_id?: string;
   title: string;
   icon: string;
+  iconColor?: string;
   type: PageType;
   position: number;
   slug: string;
   badge?: number;
   is_active?: boolean;
+  favorite?: boolean;
 }
 
 export interface Column {
@@ -89,7 +91,7 @@ export interface Relation {
   to_col_id: string;
 }
 
-export type ViewType = 'table' | 'board' | 'calendar' | 'list' | 'gallery';
+export type ViewType = 'table' | 'board' | 'calendar' | 'list' | 'gallery' | 'dashboard';
 
 export interface ViewConfig {
   id: string;

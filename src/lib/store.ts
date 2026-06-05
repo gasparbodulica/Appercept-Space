@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Database, Row, Column, CellValue, Comment, Activity, Notification, Page, ViewConfig, Filter, Sort, User, Workspace, Account } from './types';
-import { DATABASES, PAGES, USERS, WORKSPACE, COMMENTS, ACTIVITIES, NOTIFICATIONS, ACCOUNTS } from './seed';
+import { Database, Row, Column, CellValue, Comment, Activity, Notification, Page, ViewConfig, Filter, Sort, User, Workspace, Account, Channel, ChatMessage, PortalMessage, AbsenceEntry, TeamRole, ProjectShare } from './types';
+import { DATABASES, PAGES, USERS, WORKSPACE, COMMENTS, ACTIVITIES, NOTIFICATIONS, ACCOUNTS, CHANNELS, CHAT_MESSAGES, PORTAL_MESSAGES, TEAM_ROLES, PROJECT_SHARES } from './seed';
 
 interface AppState {
   // Core data
@@ -16,11 +16,29 @@ interface AppState {
   // Auth / access
   accounts: Account[];
   sessionAccountId: string | null;
+  justSignedIn: boolean; // transient — triggers the welcome screen, not persisted
+
+  // Messaging
+  channels: Channel[];
+  chatMessages: ChatMessage[];
+
+  // Client portal Q&A
+  portalMessages: PortalMessage[];
+  portalReadAt: Record<string, string>; // clientName → ISO timestamp last read by team
+
+  // Revenue sharing
+  teamRoles: TeamRole[];
+  projectShares: ProjectShare[];
+  companyRetentionPct: number; // % the company keeps (default 30)
+
+  // Team availability
+  absences: AbsenceEntry[];
 
   // UI state
   currentPageSlug: string;
   currentViewId: string | null;
   sidebarCollapsed: boolean;
+  sidebarNavOrder: string[];
   openRowId: string | null;
   openDatabaseId: string | null;
   commandPaletteOpen: boolean;
@@ -31,6 +49,7 @@ interface AppState {
   setCurrentPage: (slug: string) => void;
   setCurrentView: (viewId: string) => void;
   toggleSidebar: () => void;
+  setSidebarNavOrder: (order: string[]) => void;
   openRow: (rowId: string, databaseId: string) => void;
   closeRow: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
@@ -77,9 +96,44 @@ interface AppState {
   signUp: (name: string, email: string, password: string) => { ok: boolean; error?: string };
   signIn: (email: string, password: string) => { ok: boolean; error?: string };
   signOut: () => void;
+  clearJustSignedIn: () => void;
+  changePassword: (currentPassword: string, newPassword: string) => { ok: boolean; error?: string };
+  resetPassword: (email: string, newPassword: string) => { ok: boolean; error?: string };
+  // Email-code reset flow
+  requestResetCode: (email: string) => { ok: boolean; error?: string; code?: string; name?: string };
+  confirmReset: (email: string, code: string, newPassword: string) => { ok: boolean; error?: string };
   approveAccount: (id: string) => void;
+  approveAsClient: (id: string, company: string) => void;
   revokeAccount: (id: string) => void;
   deleteAccount: (id: string) => void;
+  createAccount: (name: string, email: string, password: string, role: 'member' | 'viewer' | 'client', clientCompany?: string) => { ok: boolean; error?: string };
+
+  // Actions — messaging
+  sendMessage: (channelId: string, body: string, extra?: { attachment?: ChatMessage['attachment']; dbref?: ChatMessage['dbref'] }) => void;
+  createChannel: (name: string, memberIds: string[], opts?: { description?: string; emoji?: string; color?: string }) => Channel;
+  createOrOpenDM: (userId: string) => Channel;
+  createGroupChat: (memberIds: string[], name?: string) => Channel;
+  addChannelMember: (channelId: string, userId: string) => void;
+  removeChannelMember: (channelId: string, userId: string) => void;
+  renameChannel: (channelId: string, name: string) => void;
+  updateChannel: (channelId: string, updates: Partial<Pick<Channel, 'name' | 'emoji' | 'color' | 'description'>>) => void;
+  deleteChannel: (channelId: string) => void;
+
+  // Actions — client portal
+  addPortalMessage: (client: string, body: string, from?: 'client' | 'team') => void;
+  markPortalRead: (client: string) => void;
+
+  // Actions — revenue sharing
+  addTeamRole: (role: Omit<TeamRole, 'id' | 'created_at'>) => void;
+  updateTeamRole: (id: string, updates: Partial<Omit<TeamRole, 'id' | 'created_at'>>) => void;
+  deleteTeamRole: (id: string) => void;
+  setCompanyRetentionPct: (pct: number) => void;
+  addProjectShare: (share: Omit<ProjectShare, 'id' | 'created_at'>) => void;
+  deleteProjectShare: (id: string) => void;
+
+  // Actions — absences
+  addAbsence: (entry: Omit<AbsenceEntry, 'id' | 'created_at'>) => void;
+  deleteAbsence: (id: string) => void;
 
   // Actions — users & workspace
   updateUser: (userId: string, updates: Partial<User>) => void;
@@ -97,6 +151,9 @@ function generateId(prefix: string) {
   return `${prefix}-${++rowCounter}-${Date.now().toString(36)}`;
 }
 
+// Transient store of password-reset codes (in-memory; cleared on reload).
+const resetCodes: Record<string, { code: string; expires: number }> = {};
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -107,12 +164,22 @@ export const useAppStore = create<AppState>()(
       workspace: WORKSPACE,
       accounts: ACCOUNTS,
       sessionAccountId: null,
+      justSignedIn: false,
+      channels: CHANNELS,
+      chatMessages: CHAT_MESSAGES,
+      portalMessages: PORTAL_MESSAGES,
+      portalReadAt: {},
+      teamRoles: TEAM_ROLES,
+      projectShares: PROJECT_SHARES,
+      companyRetentionPct: 30,
+      absences: [],
       comments: COMMENTS,
       activities: ACTIVITIES,
       notifications: NOTIFICATIONS,
       currentPageSlug: 'todo',
       currentViewId: null,
       sidebarCollapsed: false,
+      sidebarNavOrder: ['home', 'messages', 'client-portal', 'revenue-split'],
       openRowId: null,
       openDatabaseId: null,
       commandPaletteOpen: false,
@@ -123,6 +190,7 @@ export const useAppStore = create<AppState>()(
       setCurrentPage: (slug) => set({ currentPageSlug: slug, currentViewId: null, openRowId: null }),
       setCurrentView: (viewId) => set({ currentViewId: viewId }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      setSidebarNavOrder: (order) => set({ sidebarNavOrder: order }),
       openRow: (rowId, databaseId) => set({ openRowId: rowId, openDatabaseId: databaseId }),
       closeRow: () => set({ openRowId: null, openDatabaseId: null }),
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
@@ -439,18 +507,229 @@ export const useAppStore = create<AppState>()(
         const e = email.trim().toLowerCase();
         const acc = get().accounts.find((a) => a.email.toLowerCase() === e);
         if (!acc || acc.password !== password) return { ok: false, error: 'Incorrect email or password.' };
-        set({ sessionAccountId: acc.id });
+        // Trigger the welcome screen only when entering with an approved account
+        set({ sessionAccountId: acc.id, justSignedIn: acc.approved });
         return { ok: true };
       },
 
-      signOut: () => set({ sessionAccountId: null }),
+      signOut: () => set({ sessionAccountId: null, justSignedIn: false }),
+      clearJustSignedIn: () => set({ justSignedIn: false }),
 
-      approveAccount: (id) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: true, role: a.role === 'viewer' ? 'member' : a.role } : a)) })),
+      changePassword: (currentPassword, newPassword) => {
+        const acc = get().accounts.find((a) => a.id === get().sessionAccountId);
+        if (!acc) return { ok: false, error: 'No account is signed in.' };
+        if (acc.password !== currentPassword) return { ok: false, error: 'Current password is incorrect.' };
+        if (newPassword.length < 6) return { ok: false, error: 'New password must be at least 6 characters.' };
+        if (newPassword === currentPassword) return { ok: false, error: 'New password must be different.' };
+        set((s) => ({ accounts: s.accounts.map((a) => (a.id === acc.id ? { ...a, password: newPassword } : a)) }));
+        return { ok: true };
+      },
+
+      resetPassword: (email, newPassword) => {
+        const e = email.trim().toLowerCase();
+        const acc = get().accounts.find((a) => a.email.toLowerCase() === e);
+        if (!acc) return { ok: false, error: 'No account found with that email.' };
+        if (newPassword.length < 6) return { ok: false, error: 'Password must be at least 6 characters.' };
+        set((s) => ({ accounts: s.accounts.map((a) => (a.id === acc.id ? { ...a, password: newPassword } : a)) }));
+        return { ok: true };
+      },
+
+      requestResetCode: (email) => {
+        const e = email.trim().toLowerCase();
+        const acc = get().accounts.find((a) => a.email.toLowerCase() === e);
+        if (!acc) return { ok: false, error: 'No account found with that email.' };
+        const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+        resetCodes[e] = { code, expires: Date.now() + 15 * 60 * 1000 }; // 15 min
+        return { ok: true, code, name: acc.name };
+      },
+
+      confirmReset: (email, code, newPassword) => {
+        const e = email.trim().toLowerCase();
+        const entry = resetCodes[e];
+        if (!entry) return { ok: false, error: 'Request a code first.' };
+        if (Date.now() > entry.expires) { delete resetCodes[e]; return { ok: false, error: 'Code expired — request a new one.' }; }
+        if (entry.code !== code.trim()) return { ok: false, error: 'Incorrect code.' };
+        if (newPassword.length < 6) return { ok: false, error: 'Password must be at least 6 characters.' };
+        const acc = get().accounts.find((a) => a.email.toLowerCase() === e);
+        if (!acc) return { ok: false, error: 'No account found.' };
+        set((s) => ({ accounts: s.accounts.map((a) => (a.id === acc.id ? { ...a, password: newPassword } : a)) }));
+        delete resetCodes[e];
+        return { ok: true };
+      },
+
+      approveAccount: (id) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: true, role: a.role === 'viewer' || a.role === 'client' ? 'member' : a.role, client_company: undefined } : a)) })),
+      approveAsClient: (id, company) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: true, role: 'client', client_company: company } : a)) })),
       revokeAccount: (id) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: false } : a)) })),
       deleteAccount: (id) => set((s) => ({
         accounts: s.accounts.filter((a) => a.id !== id),
         sessionAccountId: s.sessionAccountId === id ? null : s.sessionAccountId,
       })),
+
+      createAccount: (name, email, password, role, clientCompany) => {
+        const existing = get().accounts.find((a) => a.email.toLowerCase() === email.trim().toLowerCase());
+        if (existing) return { ok: false, error: 'An account with this email already exists.' };
+        if (!name.trim() || !email.trim() || !password.trim()) return { ok: false, error: 'Name, email and password are required.' };
+        const initials = name.trim().split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+        const colors = ['#4f6fff', '#3ecf8e', '#a78bfa', '#2dd4bf', '#f472b6', '#fb923c', '#f5c518', '#60a5fa', '#ff5c5c'];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const acc: Account = {
+          id: generateId('acc'),
+          name: name.trim(), email: email.trim().toLowerCase(), password: password.trim(),
+          approved: true, role,
+          client_company: role === 'client' ? clientCompany : undefined,
+          initials, color,
+          created_at: new Date().toISOString(),
+        };
+        set((s) => ({ accounts: [...s.accounts, acc] }));
+        return { ok: true };
+      },
+
+      // ── Messaging ──────────────────────────────────────────────────────────
+      sendMessage: (channelId, body, extra) => {
+        const text = body.trim();
+        if (!text && !extra?.attachment && !extra?.dbref) return;
+        const msg: ChatMessage = {
+          id: generateId('msg'),
+          channel_id: channelId,
+          sender_id: get().currentUserId,
+          body: text,
+          created_at: new Date().toISOString(),
+          attachment: extra?.attachment,
+          dbref: extra?.dbref,
+        };
+        set((s) => ({ chatMessages: [...s.chatMessages, msg] }));
+      },
+
+      createChannel: (name, memberIds, opts) => {
+        const me = get().currentUserId;
+        const members = Array.from(new Set([me, ...memberIds]));
+        const colors = ['#1c75bc', '#2ee89a', '#a78bfa', '#fb923c', '#f472b6', '#00d2ff'];
+        const channel: Channel = {
+          id: generateId('ch'),
+          kind: 'channel',
+          name: name.trim() || 'New channel',
+          description: opts?.description,
+          emoji: opts?.emoji ?? 'IconMessage',
+          color: opts?.color ?? colors[get().channels.length % colors.length],
+          member_ids: members,
+          created_by: me,
+          created_at: new Date().toISOString(),
+        };
+        set((s) => ({ channels: [...s.channels, channel] }));
+        return channel;
+      },
+
+      createOrOpenDM: (userId) => {
+        const me = get().currentUserId;
+        const existing = get().channels.find(
+          (c) => c.kind === 'dm' && c.member_ids.length === 2 && c.member_ids.includes(me) && c.member_ids.includes(userId)
+        );
+        if (existing) return existing;
+        const dm: Channel = {
+          id: generateId('ch'),
+          kind: 'dm',
+          name: '',
+          member_ids: [me, userId],
+          created_by: me,
+          created_at: new Date().toISOString(),
+        };
+        set((s) => ({ channels: [...s.channels, dm] }));
+        return dm;
+      },
+
+      createGroupChat: (memberIds, name) => {
+        const me = get().currentUserId;
+        const members = Array.from(new Set([me, ...memberIds]));
+        // A 2-person chat is just a 1:1 DM
+        if (members.length === 2) return get().createOrOpenDM(members.find((id) => id !== me)!);
+        // Reuse an existing group chat with the exact same members
+        const sortedKey = [...members].sort().join(',');
+        const existing = get().channels.find(
+          (c) => c.kind === 'dm' && [...c.member_ids].sort().join(',') === sortedKey
+        );
+        if (existing) return existing;
+        const dm: Channel = {
+          id: generateId('ch'),
+          kind: 'dm',
+          name: name?.trim() ?? '',
+          member_ids: members,
+          created_by: me,
+          created_at: new Date().toISOString(),
+        };
+        set((s) => ({ channels: [...s.channels, dm] }));
+        return dm;
+      },
+
+      addChannelMember: (channelId, userId) => {
+        set((s) => ({
+          channels: s.channels.map((c) =>
+            c.id === channelId && !c.member_ids.includes(userId)
+              ? { ...c, member_ids: [...c.member_ids, userId] }
+              : c
+          ),
+        }));
+      },
+
+      removeChannelMember: (channelId, userId) => {
+        set((s) => ({
+          channels: s.channels.map((c) =>
+            c.id === channelId ? { ...c, member_ids: c.member_ids.filter((id) => id !== userId) } : c
+          ),
+        }));
+      },
+
+      renameChannel: (channelId, name) => {
+        set((s) => ({ channels: s.channels.map((c) => (c.id === channelId ? { ...c, name: name.trim() } : c)) }));
+      },
+
+      updateChannel: (channelId, updates) => {
+        set((s) => ({ channels: s.channels.map((c) => (c.id === channelId ? { ...c, ...updates } : c)) }));
+      },
+
+      // ── Client portal ──────────────────────────────────────────────────────
+      addPortalMessage: (client, body, from = 'team') => {
+        const text = body.trim();
+        if (!text) return;
+        const msg: PortalMessage = {
+          id: generateId('pm'),
+          client,
+          from,
+          sender_id: from === 'team' ? get().currentUserId : undefined,
+          body: text,
+          created_at: new Date().toISOString(),
+        };
+        set((s) => ({ portalMessages: [...s.portalMessages, msg] }));
+      },
+
+      markPortalRead: (client) => set((s) => ({ portalReadAt: { ...s.portalReadAt, [client]: new Date().toISOString() } })),
+
+      // ── Absences ───────────────────────────────────────────────────────────
+      addAbsence: (entry) => {
+        const absence: AbsenceEntry = { ...entry, id: generateId('abs'), created_at: new Date().toISOString() };
+        set((s) => ({ absences: [...s.absences, absence] }));
+      },
+      deleteAbsence: (id) => set((s) => ({ absences: s.absences.filter((a) => a.id !== id) })),
+
+      // ── Revenue sharing ────────────────────────────────────────────────────
+      addTeamRole: (role) => {
+        const newRole: TeamRole = { ...role, id: generateId('tr'), created_at: new Date().toISOString() };
+        set((s) => ({ teamRoles: [...s.teamRoles, newRole] }));
+      },
+      updateTeamRole: (id, updates) => set((s) => ({ teamRoles: s.teamRoles.map((r) => r.id === id ? { ...r, ...updates } : r) })),
+      deleteTeamRole: (id) => set((s) => ({ teamRoles: s.teamRoles.filter((r) => r.id !== id) })),
+      setCompanyRetentionPct: (pct) => set({ companyRetentionPct: Math.max(0, Math.min(100, pct)) }),
+      addProjectShare: (share) => {
+        const newShare: ProjectShare = { ...share, id: generateId('ps'), created_at: new Date().toISOString() };
+        set((s) => ({ projectShares: [newShare, ...s.projectShares] }));
+      },
+      deleteProjectShare: (id) => set((s) => ({ projectShares: s.projectShares.filter((p) => p.id !== id) })),
+
+      deleteChannel: (channelId) => {
+        set((s) => ({
+          channels: s.channels.filter((c) => c.id !== channelId),
+          chatMessages: s.chatMessages.filter((m) => m.channel_id !== channelId),
+        }));
+      },
 
       // ── Users & Workspace ──────────────────────────────────────────────────
       updateUser: (userId, updates) => {
@@ -500,10 +779,19 @@ export const useAppStore = create<AppState>()(
         workspace: state.workspace,
         accounts: state.accounts,
         sessionAccountId: state.sessionAccountId,
+        channels: state.channels,
+        chatMessages: state.chatMessages,
+        portalMessages: state.portalMessages,
+        portalReadAt: state.portalReadAt,
+        teamRoles: state.teamRoles,
+        projectShares: state.projectShares,
+        companyRetentionPct: state.companyRetentionPct,
+        absences: state.absences,
         comments: state.comments,
         activities: state.activities,
         notifications: state.notifications,
         sidebarCollapsed: state.sidebarCollapsed,
+        sidebarNavOrder: state.sidebarNavOrder,
         currentUserId: state.currentUserId,
       }),
       // Always merge seed databases & pages over persisted data so new
@@ -512,13 +800,73 @@ export const useAppStore = create<AppState>()(
         const p = persisted as Partial<AppState>;
         const persistedPages = p.pages ?? [];
         const persistedAccounts = p.accounts ?? [];
+
+        // Start from seed so newly-shipped seed databases always appear,
+        // then let persisted data win so the user's edits are preserved.
+        const mergedDatabases = { ...DATABASES, ...(p.databases ?? {}) };
+
+        // Upgrade the Passwords db: mark the Password column as type 'password'
+        // (so it gets the masked + eye-toggle UI) and swap any leftover dot
+        // placeholders for the real demo passwords from seed.
+        const pwDb = mergedDatabases['db-passwords'];
+        if (pwDb) {
+          const seedPw = DATABASES['db-passwords'];
+          const pwCol = pwDb.columns.find((c) => c.name === 'Password');
+          const seedPwColId = seedPw?.columns.find((c) => c.name === 'Password')?.id;
+          const seedByRow: Record<string, string> = {};
+          if (seedPwColId) seedPw.rows.forEach((r) => { seedByRow[r.id] = String(r.cells[seedPwColId] ?? ''); });
+          mergedDatabases['db-passwords'] = {
+            ...pwDb,
+            columns: pwDb.columns.map((c) => (c.name === 'Password' ? { ...c, type: 'password' as const } : c)),
+            rows: pwDb.rows.map((r) => {
+              if (!pwCol) return r;
+              const v = String(r.cells[pwCol.id] ?? '');
+              if (/^[•·]+$/.test(v) && seedByRow[r.id]) {
+                return { ...r, cells: { ...r.cells, [pwCol.id]: seedByRow[r.id] } };
+              }
+              return r;
+            }),
+          };
+        }
+
+        // Strip client companies from Companies DB — keep only own legal entities.
+        // Removes: (a) original seed client rows by ID, (b) any row-* rows whose
+        // name matches a company in the Clients DB (added by the old ClientPortalSync).
+        const OLD_CLIENT_COR_IDS = new Set(['cor-1','cor-3','cor-4','cor-5','cor-6','cor-7','cor-8']);
+        const coDb = mergedDatabases['db-companies'];
+        if (coDb) {
+          const clientsDbForMigration = mergedDatabases['db-clients'];
+          const ccCompColId = clientsDbForMigration?.columns.find(c => c.name === 'Company')?.id;
+          const normStr = (s: string) => s.toLowerCase().replace(/\s+(d\.o\.o\.|j\.d\.o\.o\.|obrt)\.?$/, '').trim();
+          const clientCompanyNames = new Set(
+            (clientsDbForMigration?.rows ?? [])
+              .map(r => ccCompColId ? normStr(String(r.cells[ccCompColId] ?? '')) : '')
+              .filter(Boolean)
+          );
+          const coNameColId = coDb.columns.find(c => c.position === 0)?.id ?? 'coc-name';
+          mergedDatabases['db-companies'] = {
+            ...coDb,
+            rows: coDb.rows.filter((r) => {
+              if (OLD_CLIENT_COR_IDS.has(r.id)) return false;
+              const name = normStr(String(r.cells[coNameColId] ?? ''));
+              if (name && clientCompanyNames.has(name)) return false;
+              return true;
+            }),
+          };
+        }
+
+        // Upgrade Files DB views to include type-filtered views if still on the old single-view setup
+        const filesDb = mergedDatabases['db-files'];
+        if (filesDb && filesDb.views.length === 1 && filesDb.views[0].id === 'fv-all') {
+          mergedDatabases['db-files'] = { ...filesDb, views: DATABASES['db-files'].views };
+        }
+
         return {
           ...current,
           ...p,
-          // Start from seed so newly-shipped seed databases always appear,
-          // then let persisted data win so the user's edits (columns, rows,
-          // renames) AND user-created databases are preserved.
-          databases: { ...DATABASES, ...(p.databases ?? {}) },
+          // Workspace (incl. uploaded logo) is always preserved across loads.
+          workspace: p.workspace ?? current.workspace,
+          databases: mergedDatabases,
           // Seed pages keep their slot/order but adopt any persisted edits
           // (rename/icon/colour); user-created pages are appended after.
           pages: [
@@ -562,3 +910,15 @@ export const useCurrentAccount = () =>
 
 export const useUnreadNotifications = () =>
   useAppStore((s) => s.notifications.filter((n) => !n.read).length);
+
+/** Total unread portal messages from clients (only counts `from === 'client'` messages newer than the team's last read timestamp). */
+export const useUnreadPortalCount = () =>
+  useAppStore((s) => {
+    let total = 0;
+    const uniqueClients = Array.from(new Set(s.portalMessages.map((m) => m.client)));
+    for (const client of uniqueClients) {
+      const lastRead = s.portalReadAt[client] ?? '1970-01-01T00:00:00Z';
+      total += s.portalMessages.filter((m) => m.client === client && m.from === 'client' && m.created_at > lastRead).length;
+    }
+    return total;
+  });

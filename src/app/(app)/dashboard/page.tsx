@@ -5,8 +5,9 @@ import { useAppStore } from '@/lib/store';
 import { USERS } from '@/lib/seed';
 import { Topbar } from '@/components/layout/Topbar';
 import { WeatherWidget } from '@/components/WeatherWidget';
-import { computeCompanyFinance, computeClientRevenue, type CompanyFinance } from '@/lib/finance';
-import { IconCircleCheck, IconCircleFilled, IconCalendar, IconFileText, IconCurrencyEuro, IconSun, IconSunset, IconMoon, IconTrendingUp, IconTrendingDown, IconBuildingFactory2 } from '@tabler/icons-react';
+import { computeCompanyFinance, computeClientRevenue, computeConsultingRevenue, type CompanyFinance } from '@/lib/finance';
+import { TeamCapacityHeatmap } from '@/components/TeamCapacityHeatmap';
+import { IconCircleCheck, IconCircleFilled, IconCalendar, IconFileText, IconCurrencyEuro, IconSun, IconSunset, IconMoon, IconTrendingUp, IconTrendingDown, IconBuildingFactory2, IconAlertTriangle } from '@tabler/icons-react';
 import { getStatusConfig, getPriorityConfig, formatDate, formatDateTime, isOverdue } from '@/lib/utils';
 
 const GreetingIcon = () => {
@@ -48,10 +49,15 @@ export default function DashboardPage() {
     const page = pages.find((p) => p.id === db.page_id);
     return page?.slug === 'companies';
   });
+  const consultingDb = Object.values(databases).find((db) => {
+    const page = pages.find((p) => p.id === db.page_id);
+    return page?.slug === 'consulting';
+  });
 
-  // ── Appercept finances: client revenue − expenses = profit (all auto) ──
+  // ── Appercept finances: client retainers + consulting fees − expenses = profit ──
   const { revenue: clientRevenue, activeCount: clientCount } = computeClientRevenue(clientsDb);
-  const finance = computeCompanyFinance(costsDb, 'Appercept', clientRevenue);
+  const { revenue: consultingRevenue, count: consultingCount } = computeConsultingRevenue(consultingDb);
+  const finance = computeCompanyFinance(costsDb, 'Appercept', clientRevenue, consultingRevenue);
 
   const todoRows = todoDb?.rows ?? [];
   const clientRows = clientsDb?.rows ?? [];
@@ -59,8 +65,9 @@ export default function DashboardPage() {
   const meetingRows = meetingsDb?.rows ?? [];
   const costRows = costsDb?.rows ?? [];
 
-  // Stats
-  const activeClients = clientRows.filter((r) => r.cells['col-clients-status'] === 'Active').length;
+  // Stats — find column dynamically so hardcoded IDs don't break
+  const statusColClients = clientsDb?.columns.find((c) => c.name === 'Status');
+  const activeClients = clientRows.filter((r) => statusColClients ? r.cells[statusColClients.id] === 'Active' : false).length;
   const openProjects = projectRows.filter((r) => {
     const status = r.cells['col-projects-status'];
     return status === 'In progress' || status === 'Not started';
@@ -143,7 +150,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Appercept finances — revenue minus costs = monthly profit */}
-        <ApperceptFinanceBox f={finance} clientCount={clientCount} onOpenCosts={() => router.push('/pages/costs')} />
+        <ApperceptFinanceBox f={finance} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} />
+
+        {/* Team Capacity Heatmap */}
+        <div style={{ marginBottom: 40 }}>
+          <TeamCapacityHeatmap />
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           {/* Today's meetings */}
@@ -195,8 +207,8 @@ export default function DashboardPage() {
                     <span style={{ fontSize: 12, color: cfg.color, flexShrink: 0 }}>{cfg.icon}</span>
                     <span style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
                     {date && (
-                      <span style={{ fontSize: 'var(--text-xs)', color: overdue ? 'var(--color-red)' : 'var(--color-text-muted)', flexShrink: 0 }}>
-                        {overdue && '⚠ '}{formatDate(String(date))}
+                      <span style={{ fontSize: 'var(--text-xs)', color: overdue ? 'var(--color-red)' : 'var(--color-text-muted)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        {overdue && <IconAlertTriangle size={11} />}{formatDate(String(date))}
                       </span>
                     )}
                     {priority && (
@@ -277,14 +289,15 @@ function fmt(n: number) {
   return `€${Math.round(n).toLocaleString('en-US')}`;
 }
 
-function ApperceptFinanceBox({ f, clientCount, onOpenCosts }: { f: CompanyFinance; clientCount: number; onOpenCosts: () => void }) {
+function ApperceptFinanceBox({ f, clientCount, consultingCount, onOpenCosts }: { f: CompanyFinance; clientCount: number; consultingCount: number; onOpenCosts: () => void }) {
   const profitPositive = f.profit >= 0;
   const profitColor = profitPositive ? 'var(--color-green)' : 'var(--color-red)';
 
-  // Revenue / Costs / Profit comparison bars
-  const scaleMax = Math.max(1, f.revenue, f.expenses, Math.abs(f.profit));
+  // 4-bar chart: Retainers / Consulting / Costs / Profit
+  const scaleMax = Math.max(1, f.revenue, f.consultingRevenue, f.expenses, Math.abs(f.profit));
   const bars = [
-    { label: 'Revenue', value: f.revenue, color: 'var(--color-teal)', solid: 'rgba(0,210,255,0.55)' },
+    { label: 'Retainers', value: f.revenue, color: 'var(--color-teal)', solid: 'rgba(0,210,255,0.55)' },
+    { label: 'Consulting', value: f.consultingRevenue, color: '#a78bfa', solid: 'rgba(167,139,250,0.55)' },
     { label: 'Costs', value: f.expenses, color: 'var(--color-red)', solid: 'rgba(255,79,106,0.55)' },
     { label: 'Profit', value: f.profit, color: profitColor, gradient: true },
   ];
@@ -304,7 +317,7 @@ function ApperceptFinanceBox({ f, clientCount, onOpenCosts }: { f: CompanyFinanc
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Appercept · {f.monthLabel} finances</div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Monthly revenue minus all {f.expenseCount} costs this month, calculated automatically</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Client retainers + consulting fees − {f.expenseCount} costs, calculated automatically</div>
         </div>
         <button onClick={onOpenCosts}
           style={{ padding: '6px 12px', borderRadius: 7, border: '0.5px solid var(--color-border-strong)', background: 'var(--color-bg-active)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer' }}
@@ -315,35 +328,38 @@ function ApperceptFinanceBox({ f, clientCount, onOpenCosts }: { f: CompanyFinanc
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 28, alignItems: 'stretch' }}>
         {/* Left: figures */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, justifyContent: 'center' }}>
-          <FinanceRow label="Revenue from clients" value={fmt(f.revenue)} color="var(--color-teal)" sub={`${clientCount} paying client${clientCount !== 1 ? 's' : ''}`} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center' }}>
+          <FinanceRow label="Client retainers" value={fmt(f.revenue)} color="var(--color-teal)" sub={`${clientCount} paying client${clientCount !== 1 ? 's' : ''}`} />
+          <FinanceRow label="Consulting fees" value={fmt(f.consultingRevenue)} color="#a78bfa" sub={`${consultingCount} engagement${consultingCount !== 1 ? 's' : ''} this month`} />
+          <div style={{ height: '0.5px', background: 'var(--color-border-subtle)', margin: '2px 0' }} />
+          <FinanceRow label="Total revenue" value={fmt(f.totalRevenue)} color="var(--color-accent-bright)" sub="retainers + consulting" />
           <FinanceRow label="Costs taken out" value={`− ${fmt(f.expenses)}`} color="var(--color-red)" sub={`${f.expenseCount} cost${f.expenseCount !== 1 ? 's' : ''} this month`} />
           <div style={{ height: '0.5px', background: 'var(--color-border-default)' }} />
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
               {profitPositive ? <IconTrendingUp size={13} style={{ color: profitColor }} /> : <IconTrendingDown size={13} style={{ color: profitColor }} />}
-              Monthly profit
+              Real monthly profit
             </div>
             <div style={{ fontSize: 34, fontWeight: 800, color: profitColor, lineHeight: 1 }}>{fmt(f.profit)}</div>
           </div>
         </div>
 
-        {/* Right: Revenue / Costs / Profit bars + category breakdown */}
+        {/* Right: 4-bar chart + category breakdown */}
         <div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Revenue vs costs</div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 18, height: 110, marginBottom: 14 }}>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Revenue breakdown vs costs</div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 110, marginBottom: 14 }}>
             {bars.map(b => {
               const h = Math.max(4, (Math.abs(b.value) / scaleMax) * 100);
               return (
                 <div key={b.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
-                  <div style={{ fontSize: 11, color: b.color, fontWeight: 700 }}>{fmt(b.value)}</div>
+                  <div style={{ fontSize: 10, color: b.color, fontWeight: 700 }}>{fmt(b.value)}</div>
                   <div style={{
-                    width: '100%', maxWidth: 54, height: `${h}%`, borderRadius: '7px 7px 3px 3px',
+                    width: '100%', maxWidth: 46, height: `${h}%`, borderRadius: '7px 7px 3px 3px',
                     background: b.gradient ? 'var(--gradient-accent)' : b.solid,
                     boxShadow: b.gradient ? '0 0 16px rgba(0,210,255,0.3)' : 'none',
                     transition: 'height 400ms ease',
                   }} />
-                  <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', fontWeight: 500 }}>{b.label}</div>
+                  <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', fontWeight: 500, textAlign: 'center' }}>{b.label}</div>
                 </div>
               );
             })}

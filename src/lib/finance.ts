@@ -8,9 +8,11 @@ export interface CategorySlice {
 
 export interface CompanyFinance {
   monthLabel: string;     // 'June'
-  revenue: number;        // manual monthly revenue from the company
+  revenue: number;        // client retainer revenue
+  consultingRevenue: number; // one-off consulting fees this month
+  totalRevenue: number;   // revenue + consultingRevenue
   expenses: number;       // effective cost of all rows this month (recurring + yearly + one-time)
-  profit: number;         // revenue - expenses
+  profit: number;         // totalRevenue - expenses
   byCategory: CategorySlice[];
   expenseCount: number;   // number of cost rows contributing this month
 }
@@ -130,6 +132,34 @@ export function companyRevenue(clientsDb: Database | undefined, companyName: str
   return Math.round(total);
 }
 
+/**
+ * Consulting fees earned this month (completed or in-progress rows with a fee in the current month).
+ * Counts all consulting rows whose date falls in the current month-year.
+ */
+export function computeConsultingRevenue(consultingDb: Database | undefined): { revenue: number; count: number } {
+  if (!consultingDb) return { revenue: 0, count: 0 };
+  const feeCol = consultingDb.columns.find(c => c.name === 'Fee');
+  const dateCol = consultingDb.columns.find(c => c.type === 'date');
+  const statusCol = consultingDb.columns.find(c => c.type === 'status');
+  if (!feeCol) return { revenue: 0, count: 0 };
+  const curYM = nowYM();
+  let revenue = 0;
+  let count = 0;
+  for (const row of consultingDb.rows) {
+    const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
+    if (status === 'Not started') continue; // only count active/completed
+    const fee = Number(row.cells[feeCol.id]) || 0;
+    if (!fee) continue;
+    const rowDate = dateCol ? String(row.cells[dateCol.id] ?? '') : '';
+    // Include if date is this month OR no date (treat as this month)
+    if (!rowDate || ym(rowDate) === curYM) {
+      revenue += fee;
+      count += 1;
+    }
+  }
+  return { revenue: Math.round(revenue), count };
+}
+
 /** Total monthly revenue Appercept earns from all its clients (frequency-aware). */
 export function computeClientRevenue(clientsDb: Database | undefined): { revenue: number; activeCount: number } {
   if (!clientsDb) return { revenue: 0, activeCount: 0 };
@@ -163,12 +193,13 @@ export function companyMonthlyExpenses(costsDb: Database | undefined, companyNam
 /**
  * Appercept finances for the current month.
  * Costs holds EXPENSES only — every cost (one-time, monthly or yearly) is taken
- * out of the company's manual monthly revenue to give the monthly profit.
+ * out of the company's total revenue (retainers + consulting) to give the monthly profit.
  */
 export function computeCompanyFinance(
   costsDb: Database | undefined,
   companyName: string,
   monthlyRevenue: number,
+  consultingRevenue = 0,
 ): CompanyFinance {
   const now = new Date();
   const currentYM = nowYM();
@@ -201,11 +232,14 @@ export function computeCompanyFinance(
     .sort((a, b) => b.amount - a.amount);
 
   const roundedExpenses = Math.round(expenses);
+  const totalRevenue = monthlyRevenue + consultingRevenue;
   return {
     monthLabel: MONTHS[now.getMonth()],
     revenue: monthlyRevenue,
+    consultingRevenue,
+    totalRevenue,
     expenses: roundedExpenses,
-    profit: monthlyRevenue - roundedExpenses,
+    profit: totalRevenue - roundedExpenses,
     byCategory,
     expenseCount,
   };

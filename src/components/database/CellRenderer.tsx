@@ -5,7 +5,7 @@ import { Column, Row, CellValue } from '@/lib/types';
 import { useAppStore } from '@/lib/store';
 import { formatDate, getStatusConfig, getPriorityConfig, getTagConfig, isOverdue } from '@/lib/utils';
 import { findCostsDb, companyMonthlyExpenses, findClientsDb, companyRevenue } from '@/lib/finance';
-import { IconSearch, IconX, IconPlus } from '@tabler/icons-react';
+import { IconSearch, IconX, IconPlus, IconEye, IconEyeOff } from '@tabler/icons-react';
 
 interface CellProps {
   column: Column;
@@ -167,6 +167,9 @@ function DisplayCell({ column, row, databaseId, value, onClick }: { column: Colu
       if (!value) return <div style={style} onClick={onClick} />;
       return <div style={style} onClick={onClick}><a href={`tel:${value}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', textDecoration: 'none' }}>{String(value)}</a></div>;
     }
+    case 'password': {
+      return <PasswordCell value={value === null || value === undefined ? '' : String(value)} onClick={onClick} />;
+    }
     case 'formula': {
       const databases = useAppStore.getState().databases;
       const db = databases[databaseId];
@@ -213,6 +216,48 @@ function DisplayCell({ column, row, databaseId, value, onClick }: { column: Colu
       );
     }
   }
+}
+
+// ─── Password cell (masked, with eye toggle) ─────────────────────────────────
+
+function PasswordCell({ value, onClick }: { value: string; onClick: () => void }) {
+  const [revealed, setRevealed] = useState(false);
+  const masked = '•'.repeat(Math.min(Math.max(value.length, 8), 14));
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', width: '100%', height: '100%',
+      padding: '0 6px 0 10px', overflow: 'hidden', cursor: 'pointer',
+    }}>
+      <span
+        onClick={onClick}
+        style={{
+          flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          fontSize: 'var(--text-sm)',
+          color: value ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+          fontFamily: revealed ? 'var(--font-mono)' : 'var(--font-sans)',
+          letterSpacing: revealed ? 0 : 1,
+        }}
+      >
+        {value ? (revealed ? value : masked) : ''}
+      </span>
+      {value && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setRevealed(r => !r); }}
+          title={revealed ? 'Hide password' : 'Show password'}
+          style={{
+            flexShrink: 0, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 5, border: 'none', background: 'none', cursor: 'pointer',
+            color: revealed ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
+            transition: 'color 80ms',
+          }}
+          onMouseEnter={(e) => { if (!revealed) e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+          onMouseLeave={(e) => { if (!revealed) e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+        >
+          {revealed ? <IconEyeOff size={15} /> : <IconEye size={15} />}
+        </button>
+      )}
+    </div>
+  );
 }
 
 // ─── Edit cell ────────────────────────────────────────────────────────────────
@@ -274,13 +319,49 @@ function EditCell({ column, value, onChange, onBlur, onTab, anchorRect }: {
     onChange(!value); onBlur(); return null;
   }
   if (column.type === 'date' || column.type === 'date_range') {
-    const dateVal = value ? String(value).split('|')[0] : '';
-    return <input ref={inputRef} type="date" defaultValue={dateVal} onKeyDown={keyDown} onBlur={e => { onChange(e.target.value || null); onBlur(); }} onChange={e => onChange(e.target.value || null)} style={{ ...inputStyle, colorScheme: 'dark' }} />;
+    return <DateEditCell value={value} onChange={onChange} onBlur={onBlur} onTab={onTab} />;
   }
   if (column.type === 'number') {
     return <input ref={inputRef} type="number" defaultValue={value !== null && value !== undefined ? String(value) : ''} onKeyDown={keyDown} onBlur={e => { onChange(e.target.value !== '' ? Number(e.target.value) : null); onBlur(); }} style={inputStyle} />;
   }
   return <input ref={inputRef} type={column.type === 'email' ? 'email' : column.type === 'phone' ? 'tel' : column.type === 'url' ? 'url' : 'text'} defaultValue={value !== null && value !== undefined ? String(value) : ''} onKeyDown={keyDown} onBlur={e => { onChange(e.target.value || null); onBlur(); }} style={inputStyle} />;
+}
+
+// ─── Date edit cell (extracted so useEffect is at top-level of a component) ───
+
+function DateEditCell({ value, onChange, onBlur, onTab }: {
+  value: CellValue;
+  onChange: (v: CellValue) => void;
+  onBlur: () => void;
+  onTab: (shift: boolean) => void;
+}) {
+  const todayIso = new Date().toISOString().split('T')[0];
+  const existingVal = value ? String(value).split('|')[0] : '';
+  const dateVal = existingVal || todayIso;
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    if (!existingVal) onChange(todayIso);
+  }, []);
+
+  const keyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') onBlur();
+    if (e.key === 'Tab') { e.preventDefault(); onTab(e.shiftKey); }
+    if (e.key === 'Enter') onBlur();
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      type="date"
+      defaultValue={dateVal}
+      onKeyDown={keyDown}
+      onBlur={e => { onChange(e.target.value || null); onBlur(); }}
+      onChange={e => onChange(e.target.value || null)}
+      style={{ width: '100%', height: '100%', padding: '0 10px', background: 'var(--color-bg-input)', border: 'none', outline: 'none', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', fontFamily: 'var(--font-sans)', colorScheme: 'dark' }}
+    />
+  );
 }
 
 // ─── Dropdown with fixed positioning ─────────────────────────────────────────

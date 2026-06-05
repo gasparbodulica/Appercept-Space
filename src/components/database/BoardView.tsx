@@ -4,7 +4,7 @@ import { Database, Row, ViewConfig } from '@/lib/types';
 import { useAppStore } from '@/lib/store';
 import { getStatusConfig, getPriorityConfig, getTagConfig, formatDate, isOverdue, applyCellFilter } from '@/lib/utils';
 import { USERS } from '@/lib/seed';
-import { IconPlus } from '@tabler/icons-react';
+import { IconPlus, IconAlertTriangle } from '@tabler/icons-react';
 
 const STATUS_COLUMNS = ['Not started', 'In progress', 'Started', 'Done', 'Blocked'];
 
@@ -125,8 +125,8 @@ export function BoardView({ database, view }: BoardViewProps) {
                         <span style={{ padding: '1px 6px', borderRadius: 4, background: pcfg.bg, color: pcfg.color, fontSize: 10, fontWeight: 500 }}>{priority}</span>
                       )}
                       {date && (
-                        <span style={{ fontSize: 10, color: overdue ? 'var(--color-red)' : 'var(--color-text-muted)', marginLeft: 'auto' }}>
-                          {overdue && '⚠ '}{formatDate(String(date))}
+                        <span style={{ fontSize: 10, color: overdue ? 'var(--color-red)' : 'var(--color-text-muted)', marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                          {overdue && <IconAlertTriangle size={10} />}{formatDate(String(date))}
                         </span>
                       )}
                       {user && (

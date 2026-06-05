@@ -1,4 +1,4 @@
-import { Column, Row, Database, Page, User, Workspace, ViewConfig, Comment, Activity, Notification, Account } from './types';
+import { Column, Row, Database, Page, User, Workspace, ViewConfig, Comment, Activity, Notification, Account, Channel, ChatMessage, PortalMessage } from './types';
 
 // ─── Seed Data ───────────────────────────────────────────────────────────────
 
@@ -186,14 +186,7 @@ const COMPANY_COLS: Column[] = [
 
 const COMPANY_ROWS: Row[] = [
   { id: 'cor-appercept', database_id: 'db-companies', position: 0, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Appercept', 'coc-oib': '56594199654', 'coc-director': 'Gašpar Bodulica', 'coc-industry': ['AI Consulting', 'AI Voicebot', 'AI Chatbot', 'Process Automation'] } },
-  { id: 'cor-1', database_id: 'db-companies', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Medikal Lux d.o.o.', 'coc-oib': '90063835455', 'coc-director': 'Albert Karner', 'coc-industry': ['Healthcare'] } },
-  { id: 'cor-2', database_id: 'db-companies', position: 2, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Egzosfera obrt', 'coc-oib': '56594199654', 'coc-director': 'Gašpar Bodulica', 'coc-industry': ['AI Consulting'] } },
-  { id: 'cor-3', database_id: 'db-companies', position: 3, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': '24 Sata d.o.o.', 'coc-oib': null, 'coc-director': null, 'coc-industry': ['Media'] } },
-  { id: 'cor-4', database_id: 'db-companies', position: 4, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Papaya Music', 'coc-oib': null, 'coc-director': 'Nina Barić', 'coc-industry': ['Music'] } },
-  { id: 'cor-5', database_id: 'db-companies', position: 5, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'GymBros d.o.o.', 'coc-oib': null, 'coc-director': 'Ivan Perić', 'coc-industry': ['Fitness'] } },
-  { id: 'cor-6', database_id: 'db-companies', position: 6, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Backstage Beauty', 'coc-oib': null, 'coc-director': 'Ana Kovač', 'coc-industry': ['Beauty'] } },
-  { id: 'cor-7', database_id: 'db-companies', position: 7, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Kashetta', 'coc-oib': null, 'coc-director': 'Marta Šimić', 'coc-industry': ['E-commerce'] } },
-  { id: 'cor-8', database_id: 'db-companies', position: 8, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'EFZG', 'coc-oib': null, 'coc-director': null, 'coc-industry': ['Education'] } },
+  { id: 'cor-2', database_id: 'db-companies', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'coc-name': 'Egzosfera obrt', 'coc-oib': '56594199654', 'coc-director': 'Gašpar Bodulica', 'coc-industry': ['AI Consulting'] } },
 ];
 
 // ─── COSTS DATABASE ───────────────────────────────────────────────────────────
@@ -223,18 +216,18 @@ const PASSWORD_COLS: Column[] = [
   { id: 'pwc-service', database_id: 'db-passwords', name: 'Service', type: 'text', position: 0, config: {}, hidden: false, width: 200 },
   { id: 'pwc-url', database_id: 'db-passwords', name: 'URL', type: 'url', position: 1, config: {}, hidden: false, width: 200 },
   { id: 'pwc-username', database_id: 'db-passwords', name: 'Username / Email', type: 'email', position: 2, config: {}, hidden: false, width: 200 },
-  { id: 'pwc-password', database_id: 'db-passwords', name: 'Password', type: 'text', position: 3, config: {}, hidden: false, width: 160 },
+  { id: 'pwc-password', database_id: 'db-passwords', name: 'Password', type: 'password', position: 3, config: {}, hidden: false, width: 170 },
   { id: 'pwc-notes', database_id: 'db-passwords', name: 'Notes', type: 'text', position: 4, config: {}, hidden: false, width: 220 },
   { id: 'pwc-tags', database_id: 'db-passwords', name: 'Tags', type: 'tags', position: 5, config: {}, hidden: false, width: 160 },
 ];
 
 const PASSWORD_ROWS: Row[] = [
-  { id: 'pwr-1', database_id: 'db-passwords', position: 0, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'Raiffeisenbank Austria', 'pwc-username': 'IBAN: HR4024840083237303819', 'pwc-password': '••••••••••••' } },
-  { id: 'pwr-2', database_id: 'db-passwords', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'Stripe Dashboard', 'pwc-url': 'https://dashboard.stripe.com', 'pwc-username': 'gaspar@appercept.net', 'pwc-password': '••••••••••••' } },
-  { id: 'pwr-3', database_id: 'db-passwords', position: 2, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'DigitalOcean', 'pwc-url': 'https://cloud.digitalocean.com', 'pwc-username': 'gaspar@appercept.net', 'pwc-password': '••••••••••••' } },
-  { id: 'pwr-4', database_id: 'db-passwords', position: 3, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'Adobe Creative Cloud', 'pwc-url': 'https://creativecloud.adobe.com', 'pwc-username': 'gaspar@appercept.net', 'pwc-password': '••••••••••••' } },
-  { id: 'pwr-5', database_id: 'db-passwords', position: 4, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'Notion Workspace', 'pwc-url': 'https://notion.so', 'pwc-username': 'gaspar@appercept.net', 'pwc-password': '••••••••••••' } },
-  { id: 'pwr-6', database_id: 'db-passwords', position: 5, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'Appercept Hosting', 'pwc-username': 'gaspar@appercept.net', 'pwc-password': '••••••••••••' } },
+  { id: 'pwr-1', database_id: 'db-passwords', position: 0, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'Raiffeisenbank Austria', 'pwc-username': 'IBAN: HR4024840083237303819', 'pwc-password': 'Rba!2026secure' } },
+  { id: 'pwr-2', database_id: 'db-passwords', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'Stripe Dashboard', 'pwc-url': 'https://dashboard.stripe.com', 'pwc-username': 'gaspar@appercept.net', 'pwc-password': 'Str1pe$Appercept' } },
+  { id: 'pwr-3', database_id: 'db-passwords', position: 2, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'DigitalOcean', 'pwc-url': 'https://cloud.digitalocean.com', 'pwc-username': 'gaspar@appercept.net', 'pwc-password': 'D0-droplet-92!' } },
+  { id: 'pwr-4', database_id: 'db-passwords', position: 3, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'Adobe Creative Cloud', 'pwc-url': 'https://creativecloud.adobe.com', 'pwc-username': 'gaspar@appercept.net', 'pwc-password': 'Adobe#Cloud24' } },
+  { id: 'pwr-5', database_id: 'db-passwords', position: 4, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'Notion Workspace', 'pwc-url': 'https://notion.so', 'pwc-username': 'gaspar@appercept.net', 'pwc-password': 'N0tion!space7' } },
+  { id: 'pwr-6', database_id: 'db-passwords', position: 5, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'pwc-service': 'Appercept Hosting', 'pwc-username': 'gaspar@appercept.net', 'pwc-password': 'Host!ng-Appx26' } },
 ];
 
 // ─── CLUBCROWD DATABASE ───────────────────────────────────────────────────────
@@ -272,7 +265,7 @@ const TEAM_ROWS: Row[] = [
 // ─── FILES DATABASE ───────────────────────────────────────────────────────────
 const FILE_COLS: Column[] = [
   { id: 'fc-name', database_id: 'db-files', name: 'File name', type: 'text', position: 0, config: {}, hidden: false, width: 260 },
-  { id: 'fc-type', database_id: 'db-files', name: 'Type', type: 'select', position: 1, config: { options: [{ id: 'ft1', label: 'PDF', color: '#ff5c5c' }, { id: 'ft2', label: 'Image', color: '#4f6fff' }, { id: 'ft3', label: 'Document', color: '#3ecf8e' }, { id: 'ft4', label: 'Spreadsheet', color: '#f5c518' }, { id: 'ft5', label: 'Video', color: '#a78bfa' }, { id: 'ft6', label: 'Archive', color: '#6b7280' }, { id: 'ft7', label: 'Other', color: '#2dd4bf' }] }, hidden: false, width: 120 },
+  { id: 'fc-type', database_id: 'db-files', name: 'Type', type: 'select', position: 1, config: { options: [{ id: 'ft1', label: 'PDF', color: '#ff5c5c' }, { id: 'ft-pptx', label: 'PPTX', color: '#fb923c' }, { id: 'ft-docx', label: 'DOCX', color: '#4f6fff' }, { id: 'ft-xlsx', label: 'XLSX', color: '#3ecf8e' }, { id: 'ft2', label: 'Image', color: '#a78bfa' }, { id: 'ft5', label: 'Video', color: '#2dd4bf' }, { id: 'ft6', label: 'Archive', color: '#6b7280' }, { id: 'ft7', label: 'Other', color: '#f5c518' }] }, hidden: false, width: 120 },
   { id: 'fc-size', database_id: 'db-files', name: 'Size (MB)', type: 'number', position: 2, config: { suffix: ' MB' }, hidden: false, width: 100 },
   { id: 'fc-url', database_id: 'db-files', name: 'URL / Link', type: 'url', position: 3, config: {}, hidden: false, width: 220 },
   { id: 'fc-by', database_id: 'db-files', name: 'Uploaded by', type: 'person', position: 4, config: {}, hidden: false, width: 150 },
@@ -283,10 +276,10 @@ const FILE_COLS: Column[] = [
 
 const FILE_ROWS: Row[] = [
   { id: 'fr-1', database_id: 'db-files', position: 0, created_by: 'u-1', created_at: '2026-01-15T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'fc-name': 'Appercept Invoice Template', 'fc-type': 'PDF', 'fc-size': 0.2, 'fc-by': 'u-1', 'fc-date': '2026-01-15', 'fc-tags': ['Contract'] } },
-  { id: 'fr-2', database_id: 'db-files', position: 1, created_by: 'u-1', created_at: '2026-01-20T00:00:00Z', updated_at: '2026-05-10T00:00:00Z', cells: { 'fc-name': 'ClubCrowd Pitch Deck', 'fc-type': 'Document', 'fc-size': 5.4, 'fc-by': 'u-1', 'fc-date': '2026-01-20', 'fc-tags': ['Dev', 'PPTX'] } },
+  { id: 'fr-2', database_id: 'db-files', position: 1, created_by: 'u-1', created_at: '2026-01-20T00:00:00Z', updated_at: '2026-05-10T00:00:00Z', cells: { 'fc-name': 'ClubCrowd Pitch Deck', 'fc-type': 'PPTX', 'fc-size': 5.4, 'fc-by': 'u-1', 'fc-date': '2026-01-20', 'fc-tags': ['Dev', 'PPTX'] } },
   { id: 'fr-3', database_id: 'db-files', position: 2, created_by: 'u-3', created_at: '2026-02-01T00:00:00Z', updated_at: '2026-04-20T00:00:00Z', cells: { 'fc-name': 'Brand Guidelines v2', 'fc-type': 'PDF', 'fc-size': 8.1, 'fc-by': 'u-3', 'fc-date': '2026-02-01', 'fc-tags': ['IG', 'LIN'] } },
   { id: 'fr-4', database_id: 'db-files', position: 3, created_by: 'u-3', created_at: '2026-02-10T00:00:00Z', updated_at: '2026-02-10T00:00:00Z', cells: { 'fc-name': 'Medikal Lux Logo Package', 'fc-type': 'Image', 'fc-size': 12.3, 'fc-by': 'u-3', 'fc-date': '2026-02-10' } },
-  { id: 'fr-5', database_id: 'db-files', position: 4, created_by: 'u-2', created_at: '2026-02-14T00:00:00Z', updated_at: '2026-03-01T00:00:00Z', cells: { 'fc-name': 'Client Contract Template', 'fc-type': 'Document', 'fc-size': 0.4, 'fc-by': 'u-2', 'fc-date': '2026-02-14', 'fc-tags': ['Contract'] } },
+  { id: 'fr-5', database_id: 'db-files', position: 4, created_by: 'u-2', created_at: '2026-02-14T00:00:00Z', updated_at: '2026-03-01T00:00:00Z', cells: { 'fc-name': 'Client Contract Template', 'fc-type': 'DOCX', 'fc-size': 0.4, 'fc-by': 'u-2', 'fc-date': '2026-02-14', 'fc-tags': ['Contract'] } },
   { id: 'fr-6', database_id: 'db-files', position: 5, created_by: 'u-1', created_at: '2026-03-05T00:00:00Z', updated_at: '2026-03-05T00:00:00Z', cells: { 'fc-name': 'GymBros Proposal', 'fc-type': 'PDF', 'fc-size': 1.2, 'fc-by': 'u-1', 'fc-date': '2026-03-05' } },
   { id: 'fr-7', database_id: 'db-files', position: 6, created_by: 'u-3', created_at: '2026-03-20T00:00:00Z', updated_at: '2026-03-20T00:00:00Z', cells: { 'fc-name': 'Appercept Website Assets', 'fc-type': 'Image', 'fc-size': 22.1, 'fc-by': 'u-3', 'fc-date': '2026-03-20' } },
   { id: 'fr-8', database_id: 'db-files', position: 7, created_by: 'u-1', created_at: '2026-04-01T00:00:00Z', updated_at: '2026-04-01T00:00:00Z', cells: { 'fc-name': '24 Sata Content Pack Q2', 'fc-type': 'Archive', 'fc-size': 48.7, 'fc-by': 'u-1', 'fc-date': '2026-04-01', 'fc-tags': ['IG', 'TT', 'LIN'] } },
@@ -320,12 +313,20 @@ export const DATABASES: Record<string, Database> = {
   'db-clients': { id: 'db-clients', page_id: 'p-clients', name: 'Clients', columns: CLIENT_COLS, rows: CLIENT_ROWS, views: [{ id: 'cv-all', database_id: 'db-clients', name: 'All Clients', type: 'table', icon: '👥', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
   'db-projects': { id: 'db-projects', page_id: 'p-projects', name: 'Projects', columns: PROJECT_COLS, rows: PROJECT_ROWS, views: [{ id: 'pv-all', database_id: 'db-projects', name: 'All Projects', type: 'table', icon: '🗂', filters: [], sorts: [], hidden_cols: [], is_default: true }, { id: 'pv-board', database_id: 'db-projects', name: 'Board', type: 'board', icon: '⊞', filters: [], sorts: [], hidden_cols: [] }], default_view: 'table' },
   'db-meetings': { id: 'db-meetings', page_id: 'p-meetings', name: 'Meetings', columns: MEETING_COLS, rows: MEETING_ROWS, views: [{ id: 'mv-cal', database_id: 'db-meetings', name: 'Calendar', type: 'calendar', icon: '📅', filters: [], sorts: [], hidden_cols: [], is_default: true }, { id: 'mv-all', database_id: 'db-meetings', name: 'All Meetings', type: 'table', icon: '☰', filters: [], sorts: [], hidden_cols: [] }], default_view: 'calendar' },
-  'db-companies': { id: 'db-companies', page_id: 'p-companies', name: 'Companies', columns: COMPANY_COLS, rows: COMPANY_ROWS, views: [{ id: 'comv-all', database_id: 'db-companies', name: 'All Companies', type: 'table', icon: '🏭', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
+  'db-companies': { id: 'db-companies', page_id: 'p-companies', name: 'Companies', columns: COMPANY_COLS, rows: COMPANY_ROWS, views: [{ id: 'comv-all', database_id: 'db-companies', name: 'All Companies', type: 'table', icon: 'IconBuildingFactory2', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
   'db-costs': { id: 'db-costs', page_id: 'p-costs', name: 'Costs', columns: COST_COLS, rows: COST_ROWS, views: [{ id: 'cosv-all', database_id: 'db-costs', name: 'All Costs', type: 'table', icon: '💰', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
   'db-passwords': { id: 'db-passwords', page_id: 'p-passwords', name: 'Passwords', columns: PASSWORD_COLS, rows: PASSWORD_ROWS, views: [{ id: 'pwv-all', database_id: 'db-passwords', name: 'All', type: 'table', icon: '🔐', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
   'db-clubcrowd': { id: 'db-clubcrowd', page_id: 'p-clubcrowd', name: 'ClubCrowd Clients', columns: CLUBCROWD_COLS, rows: CLUBCROWD_ROWS, views: [{ id: 'clv-all', database_id: 'db-clubcrowd', name: 'All Venues', type: 'table', icon: '🎵', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
   'db-team': { id: 'db-team', page_id: 'p-team', name: 'Team & Roles', columns: TEAM_COLS, rows: TEAM_ROWS, views: [{ id: 'tmv-all', database_id: 'db-team', name: 'All Members', type: 'table', icon: '👤', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
-  'db-files': { id: 'db-files', page_id: 'p-files', name: 'Files', columns: FILE_COLS, rows: FILE_ROWS, views: [{ id: 'fv-all', database_id: 'db-files', name: 'All Files', type: 'table', icon: '📁', filters: [], sorts: [{ column_id: 'fc-date', direction: 'desc' }], hidden_cols: [], is_default: true }], default_view: 'table' },
+  'db-files': { id: 'db-files', page_id: 'p-files', name: 'Files', columns: FILE_COLS, rows: FILE_ROWS, views: [
+    { id: 'fv-all', database_id: 'db-files', name: 'All Files', type: 'table', icon: 'IconFiles', filters: [], sorts: [{ column_id: 'fc-date', direction: 'desc' }], hidden_cols: [], is_default: true },
+    { id: 'fv-pdf', database_id: 'db-files', name: 'PDFs', type: 'table', icon: 'IconFileTypePdf', filters: [{ id: 'f-pdf', column_id: 'fc-type', operator: 'equals', value: 'PDF' }], sorts: [], hidden_cols: [] },
+    { id: 'fv-pptx', database_id: 'db-files', name: 'Presentations', type: 'table', icon: 'IconPresentation', filters: [{ id: 'f-pptx', column_id: 'fc-type', operator: 'equals', value: 'PPTX' }], sorts: [], hidden_cols: [] },
+    { id: 'fv-docx', database_id: 'db-files', name: 'Documents', type: 'table', icon: 'IconFileText', filters: [{ id: 'f-docx', column_id: 'fc-type', operator: 'equals', value: 'DOCX' }], sorts: [], hidden_cols: [] },
+    { id: 'fv-xlsx', database_id: 'db-files', name: 'Spreadsheets', type: 'table', icon: 'IconTable', filters: [{ id: 'f-xlsx', column_id: 'fc-type', operator: 'equals', value: 'XLSX' }], sorts: [], hidden_cols: [] },
+    { id: 'fv-img', database_id: 'db-files', name: 'Images', type: 'table', icon: 'IconPhoto', filters: [{ id: 'f-img', column_id: 'fc-type', operator: 'equals', value: 'Image' }], sorts: [], hidden_cols: [] },
+    { id: 'fv-vid', database_id: 'db-files', name: 'Videos', type: 'table', icon: 'IconVideo', filters: [{ id: 'f-vid', column_id: 'fc-type', operator: 'equals', value: 'Video' }], sorts: [], hidden_cols: [] },
+  ], default_view: 'table' },
   'db-consulting': {
     id: 'db-consulting',
     page_id: 'p-consulting',
@@ -361,9 +362,46 @@ export const PAGE_DB_MAP: Record<string, string> = {
 // The admin account always exists so there's a way in. Others sign up and wait
 // for the admin to grant access.
 export const ACCOUNTS: Account[] = [
-  { id: 'acc-admin', name: 'Gašpar Bodulica', email: 'gaspar@appercept.net', password: 'appercept', approved: true, role: 'admin', initials: 'GB', color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
-  { id: 'acc-2', name: 'Karlo Casni', email: 'kcasni@appercept.net', password: 'demo1234', approved: true, role: 'member', initials: 'KC', color: '#2ee89a', created_at: '2026-02-01T00:00:00Z' },
-  { id: 'acc-3', name: 'New Applicant', email: 'applicant@example.com', password: 'demo1234', approved: false, role: 'viewer', initials: 'NA', color: '#fb923c', created_at: '2026-06-02T10:00:00Z' },
+  // ── Approved internal team ────────────────────────────────────────────────
+  { id: 'acc-admin', name: 'Gašpar Bodulica',  email: 'gaspar@appercept.net',    password: 'appercept', approved: true,  role: 'admin',  initials: 'GB', color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'acc-2',     name: 'Karlo Casni',       email: 'kcasni@appercept.net',    password: 'demo1234',  approved: true,  role: 'member', initials: 'KC', color: '#2ee89a', created_at: '2026-02-01T00:00:00Z' },
+  // ── Approved clients (assigned portal) ───────────────────────────────────
+  { id: 'acc-cl-1',  name: 'Albert Karner',     email: 'albert@medikallux.hr',    password: 'medikal',   approved: true,  role: 'client', client_company: 'Medikal Lux d.o.o.', initials: 'AK', color: '#a78bfa', created_at: '2026-05-10T00:00:00Z' },
+  // ── Pending — waiting for admin approval ─────────────────────────────────
+  { id: 'acc-p1',    name: 'Ana Jurić',         email: 'ana@appercept.net',       password: 'test1234',  approved: false, role: 'viewer', initials: 'AJ', color: '#f472b6', created_at: '2026-06-04T09:12:00Z' },
+  { id: 'acc-p2',    name: 'Ivan Perić',        email: 'ivan@gymbros.hr',         password: 'gymbros',   approved: false, role: 'viewer', initials: 'IP', color: '#fb923c', created_at: '2026-06-05T14:30:00Z' },
+];
+
+// ─── MESSAGING (Teams-like) ───────────────────────────────────────────────────
+export const CHANNELS: Channel[] = [
+  { id: 'ch-general',  kind: 'channel', name: 'General',      emoji: 'IconMessage',   color: '#1c75bc', description: 'Company-wide announcements & chat', member_ids: ['u-1', 'u-2', 'u-3', 'u-4'], created_by: 'u-1', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'ch-design',   kind: 'channel', name: 'Design',       emoji: 'IconPalette',   color: '#a78bfa', description: 'Brand, UI & creative work',         member_ids: ['u-1', 'u-3'],               created_by: 'u-1', created_at: '2026-01-05T00:00:00Z' },
+  { id: 'ch-dev',      kind: 'channel', name: 'Development',  emoji: 'IconCode',      color: '#2ee89a', description: 'Engineering & shipping',           member_ids: ['u-1', 'u-4'],               created_by: 'u-1', created_at: '2026-01-05T00:00:00Z' },
+  { id: 'ch-clients',  kind: 'channel', name: 'Clients',      emoji: 'IconBriefcase', color: '#fb923c', description: 'Client accounts & deals',          member_ids: ['u-1', 'u-2'],               created_by: 'u-1', created_at: '2026-02-01T00:00:00Z' },
+  // A direct message between Gašpar (u-1) and Karlo (u-2)
+  { id: 'ch-dm-u2',    kind: 'dm',      name: '',             member_ids: ['u-1', 'u-2'], created_by: 'u-1', created_at: '2026-03-01T00:00:00Z' },
+];
+
+export const CHAT_MESSAGES: ChatMessage[] = [
+  { id: 'm-1', channel_id: 'ch-general', sender_id: 'u-1', body: 'Morning team! Big week ahead — Medikal Lux voicebot goes live Friday 🚀', created_at: '2026-06-03T08:05:00Z' },
+  { id: 'm-2', channel_id: 'ch-general', sender_id: 'u-2', body: 'On it. I’ll prep the onboarding docs today.', created_at: '2026-06-03T08:09:00Z' },
+  { id: 'm-3', channel_id: 'ch-general', sender_id: 'u-3', body: 'Brand assets for the launch are in the Files page 🎨', created_at: '2026-06-03T08:12:00Z' },
+  { id: 'm-4', channel_id: 'ch-design', sender_id: 'u-3', body: 'New ClubCrowd deck draft ready for review.', created_at: '2026-06-03T10:00:00Z' },
+  { id: 'm-5', channel_id: 'ch-design', sender_id: 'u-1', body: 'Looks 🔥 — ship it.', created_at: '2026-06-03T10:14:00Z' },
+  { id: 'm-6', channel_id: 'ch-dev', sender_id: 'u-4', body: 'Voicebot latency is down to 600ms. Deploying to staging.', created_at: '2026-06-03T11:30:00Z' },
+  { id: 'm-7', channel_id: 'ch-dev', sender_id: 'u-1', body: 'Great work 👏', created_at: '2026-06-03T11:33:00Z' },
+  { id: 'm-8', channel_id: 'ch-dm-u2', sender_id: 'u-2', body: 'Can you approve the GymBros proposal when you get a sec?', created_at: '2026-06-03T12:00:00Z' },
+  { id: 'm-9', channel_id: 'ch-dm-u2', sender_id: 'u-1', body: 'Just did. Looks solid 👍', created_at: '2026-06-03T12:05:00Z' },
+];
+
+// ─── CLIENT PORTAL Q&A ────────────────────────────────────────────────────────
+export const PORTAL_MESSAGES: PortalMessage[] = [
+  { id: 'pm-1', client: 'Medikal Lux d.o.o.', from: 'client', body: 'Hi team! When will the voice bot go live for our clinic?', created_at: '2026-06-03T09:00:00Z' },
+  { id: 'pm-2', client: 'Medikal Lux d.o.o.', from: 'team', sender_id: 'u-1', body: 'Hi Albert! We’re on track for this Friday. Final testing is happening now 🚀', created_at: '2026-06-03T09:12:00Z' },
+  { id: 'pm-3', client: 'Medikal Lux d.o.o.', from: 'client', body: 'Perfect. Can we also get a short staff training session?', created_at: '2026-06-03T09:20:00Z' },
+  { id: 'pm-4', client: 'Medikal Lux d.o.o.', from: 'team', sender_id: 'u-1', body: 'Absolutely — I’ll send over a few time slots for next week.', created_at: '2026-06-03T09:25:00Z' },
+  { id: 'pm-5', client: '24 Sata d.o.o.', from: 'client', body: 'Could you share the latest content calendar for June?', created_at: '2026-06-02T14:00:00Z' },
+  { id: 'pm-6', client: '24 Sata d.o.o.', from: 'team', sender_id: 'u-2', body: 'Just uploaded it to your Files — “24 Sata Content Pack Q2”. Let me know your thoughts!', created_at: '2026-06-02T14:30:00Z' },
 ];
 
 export const NOTIFICATIONS: Notification[] = [
@@ -382,4 +420,42 @@ export const COMMENTS: Comment[] = [
 export const ACTIVITIES: Activity[] = [
   { id: 'act-1', row_id: 'pr-1', user_id: 'u-1', action: 'updated', diff: { 'pc-status': { from: 'Not started', to: 'In progress' } }, created_at: '2026-06-01T10:00:00Z' },
   { id: 'act-2', row_id: 'pr-1', user_id: 'u-2', action: 'commented', created_at: '2026-06-02T09:10:00Z' },
+];
+
+// ─── TEAM REVENUE ROLES ───────────────────────────────────────────────────────
+import type { TeamRole, ProjectShare } from './types';
+
+export const TEAM_ROLES: TeamRole[] = [
+  { id: 'tr-1', name: 'Gašpar Bodulica', user_id: 'u-1', role_title: 'Lead / Strategy', default_share: 45, is_external: false, color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'tr-2', name: 'Karlo Casni',     user_id: 'u-2', role_title: 'Development',     default_share: 25, is_external: false, color: '#2ee89a', created_at: '2026-01-01T00:00:00Z' },
+];
+// Company retention = 100 − sum of all role shares (auto-calculated in UI)
+// Default: 45 + 25 = 70% team, 30% stays in Appercept
+
+export const PROJECT_SHARES: ProjectShare[] = [
+  {
+    id: 'ps-1',
+    label: 'Medikal Lux — Voice Bot Implementation',
+    total_amount: 3500,
+    company_share: 30,
+    entries: [
+      { role_id: 'tr-1', name: 'Gašpar Bodulica', share: 45, amount: 1575 },
+      { role_id: 'tr-2', name: 'Karlo Casni',     share: 25, amount: 875  },
+    ],
+    company_amount: 1050,
+    created_at: '2026-06-02T10:00:00Z',
+  },
+  {
+    id: 'ps-2',
+    label: 'Papaya Music — WhatsApp Chatbot',
+    total_amount: 1800,
+    company_share: 25,
+    entries: [
+      { role_id: 'tr-1', name: 'Gašpar Bodulica', share: 30, amount: 540 },
+      { role_id: 'tr-2', name: 'Karlo Casni',     share: 25, amount: 450 },
+      { role_id: 'ext-1', name: 'External Designer', share: 20, amount: 360 },
+    ],
+    company_amount: 450,
+    created_at: '2026-06-04T14:00:00Z',
+  },
 ];

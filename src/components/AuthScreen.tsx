@@ -5,13 +5,18 @@ import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { IconLock, IconMail, IconUser, IconShieldCheck, IconClock, IconLogout } from '@tabler/icons-react';
 
 export function AuthScreen() {
-  const { signIn, signUp, signOut, workspace } = useAppStore();
+  const { signIn, signUp, signOut, requestResetCode, confirmReset, workspace } = useAppStore();
   const account = useCurrentAccount();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin');
+  const [resetStep, setResetStep] = useState<'request' | 'verify'>('request');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [code, setCode] = useState('');
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   // Logged in but not approved → waiting screen
   if (account && !account.approved) {
@@ -34,45 +39,132 @@ export function AuthScreen() {
   }
 
   const submit = () => {
-    setError('');
+    setError(''); setNotice('');
+    if (mode === 'reset') {
+      void handleReset();
+      return;
+    }
     const res = mode === 'signin' ? signIn(email, password) : signUp(name, email, password);
     if (!res.ok) setError(res.error ?? 'Something went wrong.');
   };
 
+  const handleReset = async () => {
+    if (resetStep === 'request') {
+      // 1) generate a code locally, 2) email it via the API
+      const gen = requestResetCode(email);
+      if (!gen.ok) { setError(gen.error ?? 'Could not start reset.'); return; }
+      setSending(true);
+      try {
+        const res = await fetch('/api/send-reset-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), code: gen.code, name: gen.name }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) { setError(data.error || 'Could not send the email.'); setSending(false); return; }
+        setNotice(`We sent a 6-digit code to ${email.trim()}. Enter it below.`);
+        setResetStep('verify');
+      } catch {
+        setError('Could not reach the email service.');
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+    // verify step
+    if (password !== confirm) { setError('Passwords do not match.'); return; }
+    const res = confirmReset(email, code, password);
+    if (!res.ok) { setError(res.error ?? 'Could not reset password.'); return; }
+    setNotice('Password reset. You can sign in now.');
+    setMode('signin'); setResetStep('request');
+    setPassword(''); setConfirm(''); setCode('');
+  };
+
+  const switchMode = (m: 'signin' | 'signup' | 'reset') => {
+    setMode(m); setResetStep('request'); setError(''); setNotice('');
+    setPassword(''); setConfirm(''); setCode('');
+  };
+
   return (
     <Shell workspaceName={workspace.name}>
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--color-bg-active)', borderRadius: 9, marginBottom: 22 }}>
-        {(['signin', 'signup'] as const).map((m) => (
-          <button key={m} onClick={() => { setMode(m); setError(''); }}
-            style={{
-              flex: 1, padding: '8px 0', borderRadius: 6, border: 'none', cursor: 'pointer',
-              fontSize: 'var(--text-sm)', fontWeight: 600,
-              background: mode === m ? 'var(--gradient-accent)' : 'transparent',
-              color: mode === m ? '#fff' : 'var(--color-text-secondary)',
-              transition: 'all 120ms',
-            }}>
-            {m === 'signin' ? 'Sign in' : 'Create account'}
-          </button>
-        ))}
-      </div>
+      {/* Tabs (hidden in reset mode) */}
+      {mode !== 'reset' && (
+        <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--color-bg-active)', borderRadius: 9, marginBottom: 22 }}>
+          {(['signin', 'signup'] as const).map((m) => (
+            <button key={m} onClick={() => switchMode(m)}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: 6, border: 'none', cursor: 'pointer',
+                fontSize: 'var(--text-sm)', fontWeight: 600,
+                background: mode === m ? 'var(--gradient-accent)' : 'transparent',
+                color: mode === m ? '#fff' : 'var(--color-text-secondary)',
+                transition: 'all 120ms',
+              }}>
+              {m === 'signin' ? 'Sign in' : 'Create account'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {mode === 'reset' && (
+        <div style={{ marginBottom: 18 }}>
+          <h2 style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4 }}>Reset password</h2>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+            {resetStep === 'request'
+              ? 'Enter your account email and we’ll send you a 6-digit code.'
+              : 'Enter the code from your email and choose a new password.'}
+          </p>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {mode === 'signup' && (
           <Field icon={<IconUser size={15} />} placeholder="Full name" value={name} onChange={setName} onEnter={submit} />
         )}
-        <Field icon={<IconMail size={15} />} placeholder="Email" value={email} onChange={setEmail} onEnter={submit} type="email" />
-        <Field icon={<IconLock size={15} />} placeholder="Password" value={password} onChange={setPassword} onEnter={submit} type="password" />
+
+        {/* Email: shown for signin/signup, and reset-request step */}
+        {(mode !== 'reset' || resetStep === 'request') && (
+          <Field icon={<IconMail size={15} />} placeholder="Email" value={email} onChange={setEmail} onEnter={submit} type="email" />
+        )}
+
+        {/* Password for signin/signup */}
+        {mode !== 'reset' && (
+          <Field icon={<IconLock size={15} />} placeholder="Password" value={password} onChange={setPassword} onEnter={submit} type="password" />
+        )}
+
+        {/* Reset verify step: code + new password + confirm */}
+        {mode === 'reset' && resetStep === 'verify' && (
+          <>
+            <Field icon={<IconShieldCheck size={15} />} placeholder="6-digit code" value={code} onChange={setCode} onEnter={submit} />
+            <Field icon={<IconLock size={15} />} placeholder="New password" value={password} onChange={setPassword} onEnter={submit} type="password" />
+            <Field icon={<IconLock size={15} />} placeholder="Confirm new password" value={confirm} onChange={setConfirm} onEnter={submit} type="password" />
+          </>
+        )}
 
         {error && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-red)', padding: '2px 2px' }}>{error}</div>}
+        {notice && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-green)', padding: '2px 2px' }}>{notice}</div>}
 
-        <button onClick={submit} style={{
+        <button onClick={submit} disabled={sending} style={{
           marginTop: 4, padding: '11px 0', borderRadius: 9, border: 'none',
           background: 'var(--gradient-accent)', color: '#fff', fontSize: 'var(--text-sm)', fontWeight: 700,
-          cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,210,255,0.25)',
+          cursor: sending ? 'default' : 'pointer', opacity: sending ? 0.7 : 1, boxShadow: '0 4px 20px rgba(0,210,255,0.25)',
         }}>
-          {mode === 'signin' ? 'Sign in' : 'Create account'}
+          {mode === 'signin' ? 'Sign in'
+            : mode === 'signup' ? 'Create account'
+            : resetStep === 'request' ? (sending ? 'Sending…' : 'Send code')
+            : 'Reset password'}
         </button>
+
+        {mode === 'reset' && resetStep === 'verify' && (
+          <button onClick={() => { setResetStep('request'); setError(''); setNotice(''); }} style={linkBtn}>Use a different email / resend</button>
+        )}
+
+        {/* Forgot / back links */}
+        {mode === 'signin' && (
+          <button onClick={() => switchMode('reset')} style={linkBtn}>Forgot password?</button>
+        )}
+        {mode === 'reset' && (
+          <button onClick={() => switchMode('signin')} style={linkBtn}>← Back to sign in</button>
+        )}
       </div>
 
       {mode === 'signup' && (
@@ -149,4 +241,10 @@ const ghostBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8,
   border: '0.5px solid var(--color-border-default)', background: 'none', color: 'var(--color-text-secondary)',
   fontSize: 'var(--text-sm)', cursor: 'pointer',
+};
+
+const linkBtn: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
+  color: 'var(--color-accent-bright)', fontSize: 'var(--text-xs)', fontWeight: 600,
+  textAlign: 'center', alignSelf: 'center',
 };

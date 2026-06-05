@@ -2,22 +2,25 @@
 
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAppStore, useUnreadNotifications } from '@/lib/store';
+import { useAppStore, useUnreadNotifications, useUnreadPortalCount } from '@/lib/store';
 import { formatRelativeTime } from '@/lib/utils';
-import { IconShare, IconStar, IconStarFilled, IconDots, IconBell, IconBellFilled, IconPlus, IconLayoutSidebar, IconLink, IconDownload, IconTrash } from '@tabler/icons-react';
+import { IconShare, IconStar, IconStarFilled, IconDots, IconBell, IconBellFilled, IconPlus, IconLayoutSidebar, IconLink, IconDownload, IconBriefcase } from '@tabler/icons-react';
 
 interface TopbarProps {
   breadcrumb?: string[];
   pageTitle?: string;
+  extra?: React.ReactNode;
 }
 
-export function Topbar({ breadcrumb = [], pageTitle }: TopbarProps) {
+export function Topbar({ breadcrumb = [], pageTitle, extra }: TopbarProps) {
   const {
     sidebarCollapsed, toggleSidebar, setCommandPaletteOpen, setNewPageModalOpen,
     notifications, markAllNotificationsRead, markNotificationRead,
   } = useAppStore();
+  const router = useRouter();
   const pathname = usePathname();
   const unread = useUnreadNotifications();
+  const unreadPortal = useUnreadPortalCount();
   const [notifOpen, setNotifOpen] = useState(false);
   const [starred, setStarred] = useState(false);
   const [dotsOpen, setDotsOpen] = useState(false);
@@ -57,6 +60,39 @@ export function Topbar({ breadcrumb = [], pageTitle }: TopbarProps) {
           </span>
         ))}
       </div>
+
+      {/* Extra slot (passed by page) */}
+      {extra && <div style={{ marginRight: 4 }}>{extra}</div>}
+
+      {/* Portal message badge */}
+      {unreadPortal > 0 && (
+        <button
+          onClick={() => router.push('/client-portal')}
+          title={`${unreadPortal} unread message${unreadPortal !== 1 ? 's' : ''} from clients`}
+          style={{
+            position: 'relative', display: 'flex', alignItems: 'center', gap: 6,
+            padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+            background: 'rgba(255,59,59,0.12)', color: 'var(--color-red)',
+            fontSize: 'var(--text-xs)', fontWeight: 700, marginRight: 4,
+            transition: 'background 100ms',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,59,59,0.22)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,59,59,0.12)'; }}
+        >
+          <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <IconBriefcase size={14} />
+            <span style={{
+              position: 'absolute', top: -5, right: -6,
+              width: 14, height: 14, borderRadius: '50%',
+              background: 'var(--color-red)', color: '#fff',
+              fontSize: 9, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: '1.5px solid var(--color-bg-base)',
+            }}>{unreadPortal > 9 ? '9+' : unreadPortal}</span>
+          </span>
+          Client portal
+        </button>
+      )}
 
       {/* Right actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

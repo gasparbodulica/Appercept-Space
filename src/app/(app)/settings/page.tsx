@@ -22,6 +22,7 @@ const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
   member: 'Member',
   viewer: 'Viewer',
+  client: 'Client',
 };
 
 export default function SettingsPage() {
@@ -196,6 +197,51 @@ function ProfileTab() {
 
       <button onClick={handleSave} style={primaryBtnStyle}>
         {saved ? <><IconCheck size={14} /> Saved</> : 'Save changes'}
+      </button>
+
+      <div style={{ height: 28 }} />
+      <ChangePasswordCard />
+    </div>
+  );
+}
+
+function ChangePasswordCard() {
+  const changePassword = useAppStore((s) => s.changePassword);
+  const account = useCurrentAccount();
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+
+  if (!account) return null;
+
+  const submit = () => {
+    setError(''); setDone(false);
+    if (next !== confirm) { setError('New passwords do not match.'); return; }
+    const res = changePassword(current, next);
+    if (!res.ok) { setError(res.error ?? 'Could not change password.'); return; }
+    setCurrent(''); setNext(''); setConfirm('');
+    setDone(true);
+    setTimeout(() => setDone(false), 2500);
+  };
+
+  return (
+    <div>
+      <PageHeader title="Password" subtitle="Change the password you use to sign in." />
+      <SettingsCard>
+        <CardLabel>Current password</CardLabel>
+        <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} style={inputStyle} placeholder="••••••••" />
+        <Divider />
+        <CardLabel>New password</CardLabel>
+        <input type="password" value={next} onChange={(e) => setNext(e.target.value)} style={inputStyle} placeholder="At least 6 characters" />
+        <Divider />
+        <CardLabel>Confirm new password</CardLabel>
+        <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} style={inputStyle} placeholder="Repeat new password" />
+        {error && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-red)', margin: '10px 0 0' }}>{error}</p>}
+      </SettingsCard>
+      <button onClick={submit} style={primaryBtnStyle}>
+        {done ? <><IconCheck size={14} /> Password updated</> : 'Update password'}
       </button>
     </div>
   );
@@ -436,42 +482,175 @@ function RolesTab() {
 // ─── Access Tab (admin) ───────────────────────────────────────────────────────
 
 function AccessTab() {
-  const { accounts, approveAccount, revokeAccount, deleteAccount } = useAppStore();
+  const { accounts, databases, pages, approveAccount, approveAsClient, revokeAccount, deleteAccount, createAccount } = useAppStore();
   const me = useCurrentAccount();
   const pending = accounts.filter((a) => !a.approved);
-  const approved = accounts.filter((a) => a.approved);
+  const teamAccounts = accounts.filter((a) => a.approved && a.role !== 'client');
+  const clientAccounts = accounts.filter((a) => a.approved && a.role === 'client');
+
+  // Company list for client picker
+  const companiesDb = Object.values(databases).find((db) => pages.some((p) => p.id === db.page_id && p.slug === 'companies'));
+  const nameCol = companiesDb?.columns.find((c) => c.position === 0);
+  const companies = companiesDb && nameCol
+    ? companiesDb.rows.map((r) => String(r.cells[nameCol.id] ?? '')).filter((n) => n && n.toLowerCase() !== 'appercept')
+    : [];
+
+  const [clientPickerFor, setClientPickerFor] = useState<string | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState('');
+
+  // Direct create form
+  const [showCreate, setShowCreate] = useState(false);
+  const [createType, setCreateType] = useState<'member' | 'client'>('member');
+  const [cName, setCName] = useState('');
+  const [cEmail, setCEmail] = useState('');
+  const [cPass, setCPass] = useState('');
+  const [cCompany, setCCompany] = useState('');
+  const [cError, setCError] = useState('');
+  const [cDone, setCDone] = useState('');
+
+  const submitCreate = () => {
+    setCError(''); setCDone('');
+    const res = createAccount(cName, cEmail, cPass, createType === 'client' ? 'client' : 'member', createType === 'client' ? cCompany : undefined);
+    if (!res.ok) { setCError(res.error ?? 'Error'); return; }
+    setCDone(`Account for ${cName} created and approved.`);
+    setCName(''); setCEmail(''); setCPass(''); setCCompany('');
+    setTimeout(() => { setShowCreate(false); setCDone(''); }, 2200);
+  };
 
   return (
     <div>
-      <PageHeader title="Access control" subtitle="Approve who can enter the workspace, or remove accounts. Only admins see this." />
+      <PageHeader title="Access control" subtitle="Manage who can enter this workspace. Approve sign-up requests or create accounts directly." />
 
-      {/* Pending requests */}
-      <div style={{ marginBottom: 24 }}>
-        <CardLabel>Pending requests {pending.length > 0 && `(${pending.length})`}</CardLabel>
+      {/* ── Pending requests ── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <CardLabel style={{ marginBottom: 0 }}>
+            Pending sign-up requests
+            {pending.length > 0 && (
+              <span style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 20, height: 20, borderRadius: 10, background: 'var(--color-red)', color: '#fff', fontSize: 10, fontWeight: 800, padding: '0 5px' }}>{pending.length}</span>
+            )}
+          </CardLabel>
+        </div>
+
         <SettingsCard>
-          {pending.length === 0 && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', padding: '6px 0' }}>No pending requests.</div>}
-          {pending.map((a, i) => (
+          {pending.length === 0 ? (
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', padding: '6px 0' }}>No pending requests. New sign-ups will appear here.</div>
+          ) : pending.map((a, i) => (
             <div key={a.id}>
               {i > 0 && <Divider />}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Avatar account={a} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-primary)' }}>{a.name}</div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{a.email} · requested {new Date(a.created_at).toLocaleDateString()}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <Avatar account={a} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)' }}>{a.name}</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{a.email} · signed up {new Date(a.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                  </div>
+                  <button onClick={() => deleteAccount(a.id)} title="Reject & delete" style={iconDangerBtn}><IconTrash size={14} /></button>
                 </div>
-                <button onClick={() => approveAccount(a.id)} style={approveBtn}><IconCheck size={13} /> Approve</button>
-                <button onClick={() => deleteAccount(a.id)} title="Delete account" style={iconDangerBtn}><IconTrash size={14} /></button>
+                {/* Action row */}
+                <div style={{ display: 'flex', gap: 8, paddingLeft: 46, flexWrap: 'wrap' }}>
+                  <button onClick={() => approveAccount(a.id)} style={{ ...approveBtn, gap: 5 }}>
+                    <IconCheck size={13} /> Approve as team member
+                  </button>
+                  <button
+                    onClick={() => { setClientPickerFor(p => p === a.id ? null : a.id); setSelectedCompany(''); }}
+                    style={{ ...ghostSmallBtn, color: '#fb923c', borderColor: '#fb923c55', gap: 5 }}
+                  >
+                    <IconPlus size={12} /> Approve as client
+                  </button>
+                </div>
+                {/* Client company picker */}
+                {clientPickerFor === a.id && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 46, flexWrap: 'wrap', padding: '10px 12px', marginLeft: 46, background: 'rgba(251,146,60,0.07)', borderRadius: 8, border: '0.5px solid rgba(251,146,60,0.25)' }}>
+                    <span style={{ fontSize: 'var(--text-xs)', color: '#fb923c', fontWeight: 600 }}>Assign to which client portal?</span>
+                    <select
+                      value={selectedCompany}
+                      onChange={(e) => setSelectedCompany(e.target.value)}
+                      style={{ flex: 1, minWidth: 160, padding: '6px 10px', borderRadius: 7, border: '0.5px solid rgba(251,146,60,0.4)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', outline: 'none' }}
+                    >
+                      <option value="">— select company —</option>
+                      {companies.map((co) => <option key={co} value={co}>{co}</option>)}
+                    </select>
+                    <button
+                      disabled={!selectedCompany}
+                      onClick={() => { if (selectedCompany) { approveAsClient(a.id, selectedCompany); setClientPickerFor(null); setSelectedCompany(''); } }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 7, border: 'none', background: selectedCompany ? '#fb923c' : 'var(--color-bg-active)', color: selectedCompany ? '#fff' : 'var(--color-text-muted)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: selectedCompany ? 'pointer' : 'default' }}
+                    ><IconCheck size={13} /> Confirm</button>
+                    <button onClick={() => setClientPickerFor(null)} style={ghostSmallBtn}>Cancel</button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
         </SettingsCard>
       </div>
 
-      {/* Approved members */}
-      <div>
-        <CardLabel>People with access ({approved.length})</CardLabel>
+      {/* ── Create account directly ── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <CardLabel style={{ marginBottom: 0 }}>Create account directly</CardLabel>
+          {!showCreate && (
+            <button onClick={() => setShowCreate(true)} style={{ ...ghostSmallBtn, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <IconPlus size={13} /> New account
+            </button>
+          )}
+        </div>
+
+        {!showCreate ? (
+          <div style={{ padding: '14px 16px', borderRadius: 10, border: '0.5px dashed var(--color-border-default)', fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', textAlign: 'center' }}>
+            Skip the sign-up flow — create a member or client account and share credentials directly.
+            <span onClick={() => setShowCreate(true)} style={{ color: 'var(--color-accent-bright)', cursor: 'pointer', marginLeft: 6, fontWeight: 600 }}>Create account →</span>
+          </div>
+        ) : (
+          <SettingsCard>
+            {/* Type selector */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              {(['member', 'client'] as const).map((t) => (
+                <button key={t} onClick={() => setCreateType(t)} style={{
+                  flex: 1, padding: '8px 0', borderRadius: 7, border: `1px solid ${createType === t ? (t === 'client' ? '#fb923c' : 'var(--color-accent)') : 'var(--color-border-default)'}`,
+                  background: createType === t ? (t === 'client' ? 'rgba(251,146,60,0.12)' : 'rgba(0,210,255,0.10)') : 'transparent',
+                  color: createType === t ? (t === 'client' ? '#fb923c' : 'var(--color-accent-bright)') : 'var(--color-text-secondary)',
+                  fontSize: 'var(--text-sm)', fontWeight: 600, cursor: 'pointer',
+                }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {t === 'member' ? <IconUsers size={15} /> : <IconBuilding size={15} />}
+                    {t === 'member' ? 'Team member' : 'Client account'}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Full name" style={inputStyle} />
+              <input value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="Email address" type="email" style={inputStyle} />
+              <input value={cPass} onChange={(e) => setCPass(e.target.value)} placeholder="Initial password" type="password" style={inputStyle} />
+              {createType === 'client' && (
+                <select value={cCompany} onChange={(e) => setCCompany(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                  <option value="">— assign to client company —</option>
+                  {companies.map((co) => <option key={co} value={co}>{co}</option>)}
+                </select>
+              )}
+              {cError && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-red)' }}>{cError}</div>}
+              {cDone && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-green)' }}>{cDone}</div>}
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button onClick={submitCreate} style={approveBtn}>
+                  <IconCheck size={13} /> Create &amp; approve
+                </button>
+                <button onClick={() => { setShowCreate(false); setCError(''); setCName(''); setCEmail(''); setCPass(''); setCCompany(''); }} style={ghostSmallBtn}>Cancel</button>
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                Account is created pre-approved. Share the email and password with them directly.
+              </div>
+            </div>
+          </SettingsCard>
+        )}
+      </div>
+
+      {/* ── Team accounts ── */}
+      <div style={{ marginBottom: 24 }}>
+        <CardLabel>Team accounts ({teamAccounts.length})</CardLabel>
         <SettingsCard>
-          {approved.map((a, i) => (
+          {teamAccounts.map((a, i) => (
             <div key={a.id}>
               {i > 0 && <Divider />}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -487,9 +666,39 @@ function AccessTab() {
                 {a.role !== 'admin' && (
                   <>
                     <button onClick={() => revokeAccount(a.id)} title="Revoke access" style={ghostSmallBtn}>Revoke</button>
-                    <button onClick={() => deleteAccount(a.id)} title="Delete account" style={iconDangerBtn}><IconTrash size={14} /></button>
+                    <button onClick={() => deleteAccount(a.id)} title="Delete" style={iconDangerBtn}><IconTrash size={14} /></button>
                   </>
                 )}
+              </div>
+            </div>
+          ))}
+        </SettingsCard>
+      </div>
+
+      {/* ── Client accounts ── */}
+      <div>
+        <CardLabel>Client accounts ({clientAccounts.length})</CardLabel>
+        <SettingsCard>
+          {clientAccounts.length === 0 && (
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', padding: '6px 0' }}>No client accounts yet. Approve a pending request as a client, or create one directly above.</div>
+          )}
+          {clientAccounts.map((a, i) => (
+            <div key={a.id}>
+              {i > 0 && <Divider />}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Avatar account={a} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-primary)' }}>{a.name}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{a.email}</div>
+                  {a.client_company && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 4, padding: '2px 8px', borderRadius: 20, background: 'rgba(251,146,60,0.12)', color: '#fb923c', fontSize: 10, fontWeight: 600 }}>
+                      <IconBuilding size={11} /> {a.client_company}
+                    </div>
+                  )}
+                </div>
+                <RoleBadge role={a.role} />
+                <button onClick={() => revokeAccount(a.id)} title="Revoke access" style={ghostSmallBtn}>Revoke</button>
+                <button onClick={() => deleteAccount(a.id)} title="Delete" style={iconDangerBtn}><IconTrash size={14} /></button>
               </div>
             </div>
           ))}
@@ -543,9 +752,9 @@ function SettingsCard({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CardLabel({ children }: { children: React.ReactNode }) {
+function CardLabel({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, ...style }}>
       {children}
     </div>
   );
@@ -555,14 +764,15 @@ function Divider() {
   return <div style={{ height: '0.5px', background: 'var(--color-border-subtle)', margin: '16px 0' }} />;
 }
 
-function RoleBadge({ role }: { role: User['role'] }) {
-  const colors: Record<string, string> = { admin: '#4f6fff', member: '#3ecf8e', viewer: '#6b7280' };
+function RoleBadge({ role }: { role: string }) {
+  const colors: Record<string, string> = { admin: '#4f6fff', member: '#3ecf8e', viewer: '#6b7280', client: '#fb923c' };
+  const c = colors[role] ?? '#6b7280';
   return (
     <span style={{
       fontSize: 'var(--text-xs)', fontWeight: 600, padding: '3px 10px', borderRadius: 9999,
-      background: `${colors[role]}22`, color: colors[role], border: `1px solid ${colors[role]}44`,
+      background: `${c}22`, color: c, border: `1px solid ${c}44`,
     }}>
-      {ROLE_LABELS[role]}
+      {ROLE_LABELS[role] ?? role}
     </span>
   );
 }

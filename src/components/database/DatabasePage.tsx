@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Database, ViewType, ViewConfig } from '@/lib/types';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { PageIcon } from '@/lib/icons';
 import { PageEditPopover } from '@/components/PageEditPopover';
 import { Topbar } from '@/components/layout/Topbar';
@@ -39,6 +39,7 @@ let _vid = 2000;
 
 export function DatabasePage({ database, pageTitle, pageIcon, pageIconColor, pageId }: DatabasePageProps) {
   const { updatePage, addView, updateView, updateColumn } = useAppStore();
+  const isAdmin = useCurrentAccount()?.role === 'admin';
   const [activeViewId, setActiveViewId] = useState(database.views[0]?.id ?? '');
   const [editAnchor, setEditAnchor] = useState<DOMRect | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -75,19 +76,19 @@ export function DatabasePage({ database, pageTitle, pageIcon, pageIconColor, pag
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <div style={{ position: 'relative' }}>
             <button
-              onClick={e => setEditAnchor(editAnchor ? null : (e.currentTarget as HTMLElement).getBoundingClientRect())}
-              title="Edit icon, colour & name"
+              onClick={e => { if (!isAdmin) return; setEditAnchor(editAnchor ? null : (e.currentTarget as HTMLElement).getBoundingClientRect()); }}
+              title={isAdmin ? 'Edit icon, colour & name' : ''}
               style={{
                 width: 40, height: 40, borderRadius: 8, border: 'none', background: 'none',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: pageIconColor ?? '#4f6fff', cursor: 'pointer', transition: 'background 100ms',
+                color: pageIconColor ?? '#4f6fff', cursor: isAdmin ? 'pointer' : 'default', transition: 'background 100ms',
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+              onMouseEnter={e => { if (isAdmin) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
               onMouseLeave={e => (e.currentTarget.style.background = 'none')}
             >
               <PageIcon name={pageIcon} size={26} />
             </button>
-            {editAnchor && (
+            {isAdmin && editAnchor && (
               <PageEditPopover
                 name={pageTitle}
                 icon={pageIcon}

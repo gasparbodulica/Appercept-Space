@@ -3,7 +3,7 @@ import { ColumnType, ColumnConfig } from './types';
 import {
   IconLetterCase, IconHash, IconChevronDown, IconList, IconCircleDot,
   IconCalendar, IconUser, IconCheckbox, IconLink, IconMail, IconPhone,
-  IconFlag, IconTag,
+  IconFlag, IconTag, IconKey,
 } from '@tabler/icons-react';
 
 export interface ColumnTypeMeta {
@@ -27,6 +27,7 @@ export const COLUMN_TYPES: ColumnTypeMeta[] = [
   { type: 'url',          label: 'URL',           icon: <IconLink size={15} /> },
   { type: 'email',        label: 'Email',         icon: <IconMail size={15} /> },
   { type: 'phone',        label: 'Phone',         icon: <IconPhone size={15} /> },
+  { type: 'password',     label: 'Password',      icon: <IconKey size={15} /> },
 ];
 
 export function getTypeMeta(type: ColumnType): ColumnTypeMeta {

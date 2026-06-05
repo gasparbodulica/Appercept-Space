@@ -11,13 +11,14 @@ import {
   IconHome, IconPlus, IconChevronDown, IconSearch,
   IconPencil, IconChevronRight, IconSettings, IconBuilding,
   IconUsers, IconShield, IconUserPlus, IconExternalLink, IconLogout,
-  IconBriefcase, IconUpload, IconStar, IconStarFilled, IconLock,
+  IconBriefcase, IconUpload, IconStar, IconStarFilled, IconLock, IconMessage, IconPercentage,
+  IconChevronUp,
 } from '@tabler/icons-react';
 
 export function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { pages, currentPageSlug, sidebarCollapsed, toggleSidebar, setCurrentPage, setCommandPaletteOpen, setNewPageModalOpen, updatePage, toggleFavorite, movePage, currentUserId, users, workspace } = useAppStore();
+  const { pages, sidebarCollapsed, toggleSidebar, setCurrentPage, setCommandPaletteOpen, setNewPageModalOpen, updatePage, toggleFavorite, movePage, currentUserId, users, workspace, sidebarNavOrder, setSidebarNavOrder } = useAppStore();
   // Pages the current user can see: shared (no owner) + their own private pages
   const visiblePages = pages.filter((p) => !p.owner_id || p.owner_id === currentUserId);
   const hqPages = visiblePages.filter((p) => !p.owner_id);
@@ -36,17 +37,42 @@ export function Sidebar() {
   const [dragOverPageId, setDragOverPageId] = useState<string | null>(null);
   const wsHeaderRef = useRef<HTMLDivElement>(null);
 
+  const NAV_ITEMS: Record<string, { label: string; icon: React.ReactNode; path: string }> = {
+    'home':           { label: 'Home',          icon: <IconHome size={15} />,       path: '/dashboard' },
+    'messages':       { label: 'Messages',      icon: <IconMessage size={15} />,    path: '/messages' },
+    'client-portal':  { label: 'Client Portal', icon: <IconBriefcase size={15} />,  path: '/client-portal' },
+    'revenue-split':  { label: 'Revenue Split', icon: <IconPercentage size={15} />, path: '/revenue-split' },
+  };
+
+  const moveNavItem = (key: string, dir: -1 | 1) => {
+    const order = [...sidebarNavOrder];
+    const idx = order.indexOf(key);
+    if (idx === -1) return;
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= order.length) return;
+    [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+    setSidebarNavOrder(order);
+  };
+
   const navigate = (slug: string) => {
     setCurrentPage(slug);
     router.push(`/pages/${slug}`);
   };
 
-  const isActive = (slug: string) => pathname === `/pages/${slug}` || currentPageSlug === slug;
+  const isActive = (slug: string) => pathname === `/pages/${slug}`;
   const isHome = pathname === '/dashboard';
   const isSettings = pathname === '/settings';
+  const isAdmin = account?.role === 'admin';
+  const pendingCount = useAppStore((s) => s.accounts.filter((a) => !a.approved).length);
 
   const openEdit = (e: React.MouseEvent, pageId: string) => {
     e.stopPropagation();
+    // Only admins can edit a page's icon / colour / name. Others just navigate.
+    if (!isAdmin) {
+      const pg = pages.find((p) => p.id === pageId);
+      if (pg) navigate(pg.slug);
+      return;
+    }
     if (editPageId === pageId) { setEditPageId(null); return; }
     setEditAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
     setEditPageId(pageId);
@@ -87,8 +113,36 @@ export function Sidebar() {
 
         <div style={{ width: 28, height: '0.5px', background: 'var(--color-border-subtle)', marginBottom: 6, flexShrink: 0 }} />
 
-        {/* Page icons — centered, scrollable */}
+        {/* Nav icons in order, then page icons — centered, scrollable */}
         <div style={{ flex: 1, width: '100%', overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          {sidebarNavOrder.map((key) => {
+            const item = NAV_ITEMS[key];
+            if (!item) return null;
+            const activePaths: Record<string, boolean> = {
+              'home': isHome,
+              'messages': pathname === '/messages',
+              'client-portal': pathname === '/client-portal',
+              'revenue-split': pathname === '/revenue-split',
+            };
+            const active = activePaths[key] ?? false;
+            return (
+              <button key={key} onClick={() => router.push(item.path)}
+                title={item.label}
+                style={{
+                  width: 36, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 8, border: 'none',
+                  background: active ? 'var(--color-bg-active)' : 'none',
+                  color: active ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
+                  cursor: 'pointer', transition: 'all 100ms ease',
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'none'; }}
+              >
+                {item.icon}
+              </button>
+            );
+          })}
+          <div style={{ width: 28, height: '0.5px', background: 'var(--color-border-subtle)', margin: '2px 0', flexShrink: 0 }} />
           {visiblePages.map((page) => {
             const color = page.iconColor ?? '#4f6fff';
             return (
@@ -112,12 +166,15 @@ export function Sidebar() {
 
         {/* Settings + profile pinned at the bottom */}
         <div style={{ width: 28, height: '0.5px', background: 'var(--color-border-subtle)', margin: '6px 0', flexShrink: 0 }} />
-        <button onClick={() => router.push('/settings')} title="Settings"
-          style={{ width: 36, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: 'none', background: isSettings ? 'var(--color-bg-active)' : 'none', color: isSettings ? 'var(--color-accent-bright)' : 'var(--color-text-muted)', cursor: 'pointer', marginBottom: 8 }}
+        <button onClick={() => router.push('/settings?tab=access')} title={isAdmin && pendingCount > 0 ? `Settings · ${pendingCount} pending` : 'Settings'}
+          style={{ position: 'relative', width: 36, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: 'none', background: isSettings ? 'var(--color-bg-active)' : 'none', color: isSettings ? 'var(--color-accent-bright)' : 'var(--color-text-muted)', cursor: 'pointer', marginBottom: 8 }}
           onMouseEnter={(e) => { if (!isSettings) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
           onMouseLeave={(e) => { if (!isSettings) e.currentTarget.style.background = 'none'; }}
         >
           <IconSettings size={17} />
+          {isAdmin && pendingCount > 0 && (
+            <span style={{ position: 'absolute', top: 3, right: 3, width: 8, height: 8, borderRadius: '50%', background: 'var(--color-red)', border: '1.5px solid var(--color-bg-surface)' }} />
+          )}
         </button>
         <div title={currentUser.name} style={{ marginBottom: 12, flexShrink: 0 }}>
           {currentUser.avatar_url ? (
@@ -216,8 +273,52 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 8px', display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {/* Home */}
-        <NavItem icon={<IconHome size={15} />} label="Home" active={isHome} onClick={() => router.push('/dashboard')} />
+        {/* Reorderable fixed nav items */}
+        {sidebarNavOrder.map((key, idx) => {
+          const item = NAV_ITEMS[key];
+          if (!item) return null;
+          const activePaths: Record<string, boolean> = {
+            'home': isHome,
+            'messages': pathname === '/messages',
+            'client-portal': pathname === '/client-portal',
+            'revenue-split': pathname === '/revenue-split',
+          };
+          const active = activePaths[key] ?? false;
+          return (
+            <div key={key} style={{ position: 'relative' }}
+              onMouseEnter={(e) => {
+                const btns = e.currentTarget.querySelectorAll<HTMLElement>('.nav-order-btn');
+                btns.forEach((b) => { b.style.opacity = '1'; });
+              }}
+              onMouseLeave={(e) => {
+                const btns = e.currentTarget.querySelectorAll<HTMLElement>('.nav-order-btn');
+                btns.forEach((b) => { b.style.opacity = '0'; });
+              }}
+            >
+              <NavItem icon={item.icon} label={item.label} active={active} onClick={() => router.push(item.path)} />
+              <div style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 1, zIndex: 10 }}>
+                {idx > 0 && (
+                  <button
+                    className="nav-order-btn"
+                    onClick={(e) => { e.stopPropagation(); moveNavItem(key, -1); }}
+                    style={{ opacity: 0, width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: 3, background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', padding: 0, transition: 'opacity 80ms' }}
+                  >
+                    <IconChevronUp size={10} />
+                  </button>
+                )}
+                {idx < sidebarNavOrder.length - 1 && (
+                  <button
+                    className="nav-order-btn"
+                    onClick={(e) => { e.stopPropagation(); moveNavItem(key, 1); }}
+                    style={{ opacity: 0, width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: 3, background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', padding: 0, transition: 'opacity 80ms' }}
+                  >
+                    <IconChevronDown size={10} />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
 
         {/* Add new */}
         <NavItem icon={<IconPlus size={15} />} label="Add new" onClick={() => setNewPageModalOpen(true)} />
@@ -420,12 +521,30 @@ export function Sidebar() {
 
       {/* Pinned footer — Settings + profile (never scrolls) */}
       <div style={{ borderTop: '0.5px solid var(--color-border-subtle)', padding: '8px 8px 4px', flexShrink: 0 }}>
-        <NavItem
-          icon={<IconSettings size={15} />}
-          label="Settings"
-          active={isSettings}
-          onClick={() => router.push('/settings')}
-        />
+        <div
+          onClick={() => router.push(isAdmin && pendingCount > 0 ? '/settings?tab=access' : '/settings')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px',
+            borderRadius: 6, cursor: 'pointer', fontSize: 'var(--text-sm)',
+            color: isSettings ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+            background: isSettings ? 'var(--color-bg-active)' : 'transparent',
+            borderLeft: isSettings ? '2px solid var(--color-accent)' : '2px solid transparent',
+            transition: 'all 100ms ease',
+          }}
+          onMouseEnter={(e) => { if (!isSettings) { e.currentTarget.style.background = 'var(--color-bg-hover)'; e.currentTarget.style.color = 'var(--color-text-primary)'; } }}
+          onMouseLeave={(e) => { if (!isSettings) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; } }}
+        >
+          <span style={{ display: 'flex', flexShrink: 0 }}><IconSettings size={15} /></span>
+          <span style={{ flex: 1 }}>Settings</span>
+          {isAdmin && pendingCount > 0 && (
+            <span style={{
+              minWidth: 18, height: 18, borderRadius: 9, padding: '0 5px',
+              background: 'var(--color-red)', color: '#fff',
+              fontSize: 10, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>{pendingCount > 9 ? '9+' : pendingCount}</span>
+          )}
+        </div>
       </div>
       <div style={{ borderTop: '0.5px solid var(--color-border-subtle)', padding: '10px 12px', flexShrink: 0 }}>
         <div

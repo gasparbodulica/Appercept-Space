@@ -231,19 +231,52 @@ const PASSWORD_ROWS: Row[] = [
 ];
 
 // ─── CLUBCROWD DATABASE ───────────────────────────────────────────────────────
+// Revenue model: Appercept takes a fee per table reservation (no subscription plans).
+// Stripe Connect: each venue connects their Stripe account; fees flow automatically.
 const CLUBCROWD_COLS: Column[] = [
-  { id: 'clc-venue', database_id: 'db-clubcrowd', name: 'Venue name', type: 'text', position: 0, config: {}, hidden: false, width: 180 },
-  { id: 'clc-city', database_id: 'db-clubcrowd', name: 'City', type: 'text', position: 1, config: {}, hidden: false, width: 120 },
-  { id: 'clc-plan', database_id: 'db-clubcrowd', name: 'Subscription plan', type: 'select', position: 2, config: { options: [{ id: 'sp1', label: 'Free', color: '#6b7280' }, { id: 'sp2', label: 'Starter', color: '#f5a623' }, { id: 'sp3', label: 'Pro', color: '#4f6fff' }] }, hidden: false, width: 120 },
-  { id: 'clc-bookings', database_id: 'db-clubcrowd', name: 'Monthly bookings', type: 'number', position: 3, config: {}, hidden: false, width: 140 },
-  { id: 'clc-joined', database_id: 'db-clubcrowd', name: 'Platform joined', type: 'date', position: 4, config: {}, hidden: false, width: 130 },
-  { id: 'clc-status', database_id: 'db-clubcrowd', name: 'Status', type: 'select', position: 5, config: { options: [{ id: 'cs1', label: 'Active', color: '#3ecf8e' }, { id: 'cs2', label: 'Pending', color: '#f5a623' }] }, hidden: false, width: 100 },
+  { id: 'clc-venue',       database_id: 'db-clubcrowd', name: 'Venue name',             type: 'text',   position: 0, config: {},                       hidden: false, width: 200 },
+  { id: 'clc-city',        database_id: 'db-clubcrowd', name: 'City',                   type: 'text',   position: 1, config: {},                       hidden: false, width: 120 },
+  { id: 'clc-fee',         database_id: 'db-clubcrowd', name: 'Fee / reservation (€)',  type: 'number', position: 2, config: { prefix: '€' },           hidden: false, width: 160 },
+  { id: 'clc-reservations',database_id: 'db-clubcrowd', name: 'Monthly reservations',   type: 'number', position: 3, config: {},                       hidden: false, width: 160 },
+  { id: 'clc-avg-spend',   database_id: 'db-clubcrowd', name: 'Avg table spend (€)',    type: 'number', position: 4, config: { prefix: '€' },           hidden: false, width: 150 },
+  { id: 'clc-stripe-id',   database_id: 'db-clubcrowd', name: 'Stripe Account ID',      type: 'text',   position: 5, config: {},                       hidden: false, width: 200 },
+  { id: 'clc-stripe-st',   database_id: 'db-clubcrowd', name: 'Stripe status',          type: 'select', position: 6, config: { options: [{ id: 'ss1', label: 'Connected', color: '#3ecf8e' }, { id: 'ss2', label: 'Pending', color: '#f5a623' }, { id: 'ss3', label: 'Disconnected', color: '#ff5c5c' }] }, hidden: false, width: 130 },
+  { id: 'clc-joined',      database_id: 'db-clubcrowd', name: 'Platform joined',        type: 'date',   position: 7, config: {},                       hidden: false, width: 130 },
+  { id: 'clc-status',      database_id: 'db-clubcrowd', name: 'Status',                 type: 'select', position: 8, config: { options: [{ id: 'cs-lead', label: 'Lead', color: '#60a5fa' }, { id: 'cs-onb', label: 'Onboarding', color: '#f5a623' }, { id: 'cs-active', label: 'Active', color: '#3ecf8e' }, { id: 'cs-past', label: 'Past', color: '#6b7280' }] }, hidden: false, width: 110 },
+  { id: 'clc-notes',       database_id: 'db-clubcrowd', name: 'Notes',                  type: 'text',   position: 9, config: {},                       hidden: false, width: 240 },
 ];
 
 const CLUBCROWD_ROWS: Row[] = [
-  { id: 'clr-1', database_id: 'db-clubcrowd', position: 0, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'clc-venue': 'Aquarius Club', 'clc-city': 'Zagreb', 'clc-plan': 'Pro', 'clc-status': 'Active' } },
-  { id: 'clr-2', database_id: 'db-clubcrowd', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'clc-venue': 'Amadeus Club', 'clc-city': 'Zagreb', 'clc-plan': 'Starter', 'clc-status': 'Active' } },
-  { id: 'clr-3', database_id: 'db-clubcrowd', position: 2, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'clc-venue': 'Boogaloo', 'clc-city': 'Zagreb', 'clc-plan': 'Free', 'clc-status': 'Pending' } },
+  {
+    id: 'clr-1', database_id: 'db-clubcrowd', position: 0, created_by: 'u-1',
+    created_at: '2026-01-15T00:00:00Z', updated_at: '2026-06-01T00:00:00Z',
+    cells: { 'clc-venue': 'Aquarius Club', 'clc-city': 'Zagreb', 'clc-fee': 2.5, 'clc-reservations': 340, 'clc-avg-spend': 120, 'clc-stripe-id': 'acct_1QxAquarius', 'clc-stripe-st': 'Connected', 'clc-joined': '2026-01-15', 'clc-status': 'Active' },
+  },
+  {
+    id: 'clr-2', database_id: 'db-clubcrowd', position: 1, created_by: 'u-1',
+    created_at: '2026-02-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z',
+    cells: { 'clc-venue': 'Amadeus Club', 'clc-city': 'Zagreb', 'clc-fee': 2, 'clc-reservations': 210, 'clc-avg-spend': 90, 'clc-stripe-id': 'acct_1QxAmadeus', 'clc-stripe-st': 'Connected', 'clc-joined': '2026-02-01', 'clc-status': 'Active' },
+  },
+  {
+    id: 'clr-3', database_id: 'db-clubcrowd', position: 2, created_by: 'u-1',
+    created_at: '2026-03-10T00:00:00Z', updated_at: '2026-06-01T00:00:00Z',
+    cells: { 'clc-venue': 'Boogaloo', 'clc-city': 'Zagreb', 'clc-fee': 1.5, 'clc-reservations': 95, 'clc-avg-spend': 70, 'clc-stripe-id': '', 'clc-stripe-st': 'Onboarding', 'clc-joined': '2026-03-10', 'clc-status': 'Onboarding' },
+  },
+  {
+    id: 'clr-4', database_id: 'db-clubcrowd', position: 3, created_by: 'u-1',
+    created_at: '2026-04-20T00:00:00Z', updated_at: '2026-06-01T00:00:00Z',
+    cells: { 'clc-venue': 'Barbarella', 'clc-city': 'Zagreb', 'clc-fee': 3, 'clc-reservations': 180, 'clc-avg-spend': 150, 'clc-stripe-id': 'acct_1QxBarbarella', 'clc-stripe-st': 'Connected', 'clc-joined': '2026-04-20', 'clc-status': 'Active' },
+  },
+  {
+    id: 'clr-5', database_id: 'db-clubcrowd', position: 4, created_by: 'u-1',
+    created_at: '2026-05-28T00:00:00Z', updated_at: '2026-06-01T00:00:00Z',
+    cells: { 'clc-venue': 'Klub Katran', 'clc-city': 'Split', 'clc-fee': 2.5, 'clc-reservations': 0, 'clc-avg-spend': 0, 'clc-stripe-id': '', 'clc-stripe-st': 'Disconnected', 'clc-status': 'Lead', 'clc-notes': 'Interested after Aquarius referral — demo scheduled.' },
+  },
+  {
+    id: 'clr-6', database_id: 'db-clubcrowd', position: 5, created_by: 'u-1',
+    created_at: '2026-01-05T00:00:00Z', updated_at: '2026-05-01T00:00:00Z',
+    cells: { 'clc-venue': 'Pepermint', 'clc-city': 'Zagreb', 'clc-fee': 2, 'clc-reservations': 0, 'clc-avg-spend': 0, 'clc-stripe-id': 'acct_1QxPepermint', 'clc-stripe-st': 'Disconnected', 'clc-joined': '2026-01-05', 'clc-status': 'Past', 'clc-notes': 'Churned in April — switched to in-house system.' },
+  },
 ];
 
 // ─── TEAM DATABASE ────────────────────────────────────────────────────────────

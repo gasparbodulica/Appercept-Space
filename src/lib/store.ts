@@ -861,6 +861,27 @@ export const useAppStore = create<AppState>()(
           mergedDatabases['db-files'] = { ...filesDb, views: DATABASES['db-files'].views };
         }
 
+        // Migrate ClubCrowd DB to the new revenue (fee-per-reservation) schema.
+        // The old schema had a 'clc-plan' column; if it's still there, replace
+        // the whole DB with the new seed (columns + rows) since the model changed.
+        const ccDb = mergedDatabases['db-clubcrowd'];
+        if (ccDb && ccDb.columns.some((c) => c.id === 'clc-plan')) {
+          mergedDatabases['db-clubcrowd'] = DATABASES['db-clubcrowd'];
+        } else if (ccDb) {
+          // Already on the new schema but the Status pipeline options may be old
+          // (Active/Inactive/Onboarding). Refresh the Status column config to the
+          // new pipeline (Lead/Onboarding/Active/Past) without touching rows.
+          const statusCol = ccDb.columns.find((c) => c.id === 'clc-status');
+          const hasLead = statusCol?.config.options?.some((o) => o.label === 'Lead');
+          if (statusCol && !hasLead) {
+            const seedStatusCol = DATABASES['db-clubcrowd'].columns.find((c) => c.id === 'clc-status');
+            mergedDatabases['db-clubcrowd'] = {
+              ...ccDb,
+              columns: ccDb.columns.map((c) => (c.id === 'clc-status' && seedStatusCol ? { ...c, config: seedStatusCol.config } : c)),
+            };
+          }
+        }
+
         return {
           ...current,
           ...p,

@@ -864,9 +864,10 @@ export const useAppStore = create<AppState>()(
         // Migrate ClubCrowd DB to the new revenue (fee-per-reservation) schema.
         // The old schema had a 'clc-plan' column; if it's still there, replace
         // the whole DB with the new seed (columns + rows) since the model changed.
-        const ccDb = mergedDatabases['db-clubcrowd'];
+        let ccDb = mergedDatabases['db-clubcrowd'];
         if (ccDb && ccDb.columns.some((c) => c.id === 'clc-plan')) {
           mergedDatabases['db-clubcrowd'] = DATABASES['db-clubcrowd'];
+          ccDb = mergedDatabases['db-clubcrowd'];
         } else if (ccDb) {
           // Already on the new schema but the Status pipeline options may be old
           // (Active/Inactive/Onboarding). Refresh the Status column config to the
@@ -879,8 +880,45 @@ export const useAppStore = create<AppState>()(
               ...ccDb,
               columns: ccDb.columns.map((c) => (c.id === 'clc-status' && seedStatusCol ? { ...c, config: seedStatusCol.config } : c)),
             };
+            ccDb = mergedDatabases['db-clubcrowd'];
           }
         }
+
+        // Add the 'Operating season' column if missing, defaulting existing rows
+        // to Year-round (needed to calculate real yearly revenue per club).
+        if (ccDb && !ccDb.columns.some((c) => c.id === 'clc-season')) {
+          const seedSeasonCol = DATABASES['db-clubcrowd'].columns.find((c) => c.id === 'clc-season');
+          if (seedSeasonCol) {
+            // Insert season after avg-spend (position 4), bump later columns by 1
+            const cols = ccDb.columns.map((c) => (c.position >= 5 ? { ...c, position: c.position + 1 } : c));
+            mergedDatabases['db-clubcrowd'] = {
+              ...ccDb,
+              columns: [...cols, { ...seedSeasonCol, database_id: ccDb.id }].sort((a, b) => a.position - b.position),
+              rows: ccDb.rows.map((r) => ({ ...r, cells: { ...r.cells, 'clc-season': r.cells['clc-season'] ?? 'Year-round' } })),
+            };
+            ccDb = mergedDatabases['db-clubcrowd'];
+          }
+        }
+
+        // Clear the FAKE seed Stripe IDs (acct_1Qx*) that were shipped earlier —
+        // no club has actually connected yet. Only touches these known demo IDs,
+        // never real Stripe accounts (acct_1...) the user connects later.
+        if (ccDb) {
+          const FAKE_STRIPE = /^acct_1Qx/;
+          const touched = ccDb.rows.some((r) => FAKE_STRIPE.test(String(r.cells['clc-stripe-id'] ?? '')));
+          if (touched) {
+            mergedDatabases['db-clubcrowd'] = {
+              ...ccDb,
+              rows: ccDb.rows.map((r) => {
+                if (!FAKE_STRIPE.test(String(r.cells['clc-stripe-id'] ?? ''))) return r;
+                return { ...r, cells: { ...r.cells, 'clc-stripe-id': '', 'clc-stripe-st': 'Disconnected' } };
+              }),
+            };
+          }
+        }
+
+        // Team & Roles DB was merged into the Team & Revenue page — drop it.
+        delete mergedDatabases['db-team'];
 
         return {
           ...current,
@@ -890,9 +928,10 @@ export const useAppStore = create<AppState>()(
           databases: mergedDatabases,
           // Seed pages keep their slot/order but adopt any persisted edits
           // (rename/icon/colour); user-created pages are appended after.
+          // 'p-team' is explicitly dropped — the Team & Roles DB was removed.
           pages: [
             ...PAGES.map((sp) => persistedPages.find((pp) => pp.id === sp.id) ?? sp),
-            ...persistedPages.filter((pp) => !PAGES.some((sp) => sp.id === pp.id)),
+            ...persistedPages.filter((pp) => pp.id !== 'p-team' && !PAGES.some((sp) => sp.id === pp.id)),
           ],
           // Seed accounts (admin always exists) with persisted state, plus signups.
           accounts: [

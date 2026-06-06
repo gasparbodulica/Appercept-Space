@@ -21,7 +21,7 @@ import {
   IconCloud, IconDatabase, IconServer, IconPackage, IconDownload,
   // Finance
   IconCurrencyEuro, IconCurrencyDollar, IconReceipt, IconWallet,
-  IconCreditCard, IconCoin,
+  IconCreditCard, IconCoin, IconArrowsExchange, IconScale, IconBuildingBank, IconReportMoney,
   // Analytics
   IconChartBar, IconChartLine, IconChartPie, IconChartDots,
   IconAnalyze, IconStack, IconGraph,
@@ -64,7 +64,7 @@ export const ICON_MAP: Record<string, IconComponent> = {
   IconCloud, IconDatabase, IconServer, IconPackage, IconDownload,
   // Finance
   IconCurrencyEuro, IconCurrencyDollar, IconReceipt, IconWallet,
-  IconCreditCard, IconCoin,
+  IconCreditCard, IconCoin, IconArrowsExchange, IconScale, IconBuildingBank, IconReportMoney,
   // Analytics
   IconChartBar, IconChartLine, IconChartPie, IconChartDots,
   IconAnalyze, IconStack, IconGraph,

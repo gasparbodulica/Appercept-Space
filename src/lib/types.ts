@@ -230,6 +230,7 @@ export interface TeamRole {
   name: string;           // display name, e.g. "Gašpar Bodulica" or "Freelance Designer"
   user_id?: string;       // linked workspace user id (optional)
   role_title: string;     // e.g. "Lead", "Developer", "Designer", "External"
+  email?: string;         // contact email (merged in from the old Team & Roles DB)
   default_share: number;  // default % of project revenue (0–100)
   is_external: boolean;   // external collaborators are ad-hoc, not full team
   color: string;

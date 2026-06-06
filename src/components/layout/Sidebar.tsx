@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
-import { Workspace, User } from '@/lib/types';
+import { Workspace, User, Page } from '@/lib/types';
 import { PageIcon } from '@/lib/icons';
 import { PageEditPopover } from '@/components/PageEditPopover';
 import {
@@ -12,7 +12,6 @@ import {
   IconPencil, IconChevronRight, IconSettings, IconBuilding,
   IconUsers, IconShield, IconUserPlus, IconExternalLink, IconLogout,
   IconBriefcase, IconUpload, IconStar, IconStarFilled, IconLock, IconMessage, IconPercentage,
-  IconChevronUp,
 } from '@tabler/icons-react';
 
 export function Sidebar() {
@@ -21,7 +20,16 @@ export function Sidebar() {
   const { pages, sidebarCollapsed, toggleSidebar, setCurrentPage, setCommandPaletteOpen, setNewPageModalOpen, updatePage, toggleFavorite, movePage, currentUserId, users, workspace, sidebarNavOrder, setSidebarNavOrder } = useAppStore();
   // Pages the current user can see: shared (no owner) + their own private pages
   const visiblePages = pages.filter((p) => !p.owner_id || p.owner_id === currentUserId);
-  const hqPages = visiblePages.filter((p) => !p.owner_id);
+  // Consulting & ClubCrowd are separate ventures — pulled out of the HQ teamspace flow.
+  const VENTURE_SLUGS = ['consulting', 'clubcrowd'];
+  // P&L, Cash Flow & Balance Sheet form the Financial Statements section.
+  const FINANCIAL_SLUGS = ['costs', 'cashflow', 'balance-sheet'];
+  const hqPages = visiblePages.filter((p) => !p.owner_id && !VENTURE_SLUGS.includes(p.slug) && !FINANCIAL_SLUGS.includes(p.slug));
+  const venturePages = visiblePages.filter((p) => !p.owner_id && VENTURE_SLUGS.includes(p.slug));
+  // Keep Financial Statements in a fixed, logical order (P&L → Cash Flow → Balance Sheet)
+  const financialPages = FINANCIAL_SLUGS
+    .map((s) => visiblePages.find((p) => !p.owner_id && p.slug === s))
+    .filter((p): p is NonNullable<typeof p> => !!p);
   const privatePages = visiblePages.filter((p) => p.owner_id === currentUserId);
   const favoritePages = visiblePages.filter((p) => p.favorite);
   const account = useCurrentAccount();
@@ -35,22 +43,24 @@ export function Sidebar() {
   const [hqExpanded, setHqExpanded] = useState(true);
   const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
   const [dragOverPageId, setDragOverPageId] = useState<string | null>(null);
+  const [draggedNavKey, setDraggedNavKey] = useState<string | null>(null);
+  const [dragOverNavKey, setDragOverNavKey] = useState<string | null>(null);
   const wsHeaderRef = useRef<HTMLDivElement>(null);
 
   const NAV_ITEMS: Record<string, { label: string; icon: React.ReactNode; path: string }> = {
     'home':           { label: 'Home',          icon: <IconHome size={15} />,       path: '/dashboard' },
     'messages':       { label: 'Messages',      icon: <IconMessage size={15} />,    path: '/messages' },
     'client-portal':  { label: 'Client Portal', icon: <IconBriefcase size={15} />,  path: '/client-portal' },
-    'revenue-split':  { label: 'Revenue Split', icon: <IconPercentage size={15} />, path: '/revenue-split' },
+    'revenue-split':  { label: 'Team & Revenue', icon: <IconPercentage size={15} />, path: '/revenue-split' },
   };
 
-  const moveNavItem = (key: string, dir: -1 | 1) => {
-    const order = [...sidebarNavOrder];
-    const idx = order.indexOf(key);
-    if (idx === -1) return;
-    const newIdx = idx + dir;
-    if (newIdx < 0 || newIdx >= order.length) return;
-    [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+  // Drag-and-drop reorder: drop `draggedKey` onto the slot of `targetKey`
+  const reorderNavItem = (draggedKey: string, targetKey: string) => {
+    if (draggedKey === targetKey) return;
+    const order = sidebarNavOrder.filter((k) => k !== draggedKey);
+    const targetIdx = order.indexOf(targetKey);
+    if (targetIdx === -1) return;
+    order.splice(targetIdx, 0, draggedKey);
     setSidebarNavOrder(order);
   };
 
@@ -76,6 +86,113 @@ export function Sidebar() {
     if (editPageId === pageId) { setEditPageId(null); return; }
     setEditAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
     setEditPageId(pageId);
+  };
+
+  // One sidebar page row (icon + title + badge + favourite star), drag-reorderable.
+  const renderPageRow = (page: Page) => {
+    const active = isActive(page.slug);
+    const color = page.iconColor ?? '#4f6fff';
+    const isDragOver = dragOverPageId === page.id && draggedPageId !== page.id;
+    return (
+      <div
+        key={page.id}
+        style={{ position: 'relative', borderTop: isDragOver ? '2px solid var(--color-accent-bright)' : '2px solid transparent', opacity: draggedPageId === page.id ? 0.4 : 1 }}
+        draggable
+        onDragStart={(e) => { setDraggedPageId(page.id); e.dataTransfer.effectAllowed = 'move'; }}
+        onDragOver={(e) => { e.preventDefault(); if (draggedPageId && draggedPageId !== page.id) setDragOverPageId(page.id); }}
+        onDragLeave={() => setDragOverPageId((cur) => (cur === page.id ? null : cur))}
+        onDrop={(e) => { e.preventDefault(); if (draggedPageId && draggedPageId !== page.id) movePage(draggedPageId, page.id); setDraggedPageId(null); setDragOverPageId(null); }}
+        onDragEnd={() => { setDraggedPageId(null); setDragOverPageId(null); }}
+      >
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px 3px 4px',
+            borderRadius: 6, fontSize: 'var(--text-sm)', userSelect: 'none',
+            background: active ? 'var(--color-bg-active)' : 'transparent',
+            borderLeft: active ? `2px solid ${color}` : '2px solid transparent',
+            transition: 'background 100ms ease',
+          }}
+          onMouseEnter={(e) => {
+            if (!active) e.currentTarget.style.background = 'var(--color-bg-hover)';
+            const star = e.currentTarget.querySelector('.page-star') as HTMLElement | null;
+            if (star) star.style.opacity = '1';
+          }}
+          onMouseLeave={(e) => {
+            if (!active) e.currentTarget.style.background = 'transparent';
+            const star = e.currentTarget.querySelector('.page-star') as HTMLElement | null;
+            if (star && !page.favorite) star.style.opacity = '0';
+          }}
+        >
+          {/* Icon button — opens edit popover */}
+          <button
+            onClick={(e) => openEdit(e, page.id)}
+            title="Edit icon, colour & name"
+            style={{
+              width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 5, border: 'none', background: 'none',
+              cursor: 'pointer', flexShrink: 0, transition: 'background 80ms',
+              color,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-active)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+          >
+            {page.is_active
+              ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-green)', display: 'block' }} />
+              : <PageIcon name={page.icon} size={14} />
+            }
+          </button>
+
+          {/* Title — navigates */}
+          <span
+            onClick={() => navigate(page.slug)}
+            style={{
+              flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              cursor: 'pointer', color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+              fontSize: 'var(--text-sm)',
+            }}
+          >
+            {page.title}
+          </span>
+
+          {page.badge && (
+            <span style={{
+              background: color, color: '#fff', fontSize: 10,
+              fontWeight: 600, padding: '1px 5px', borderRadius: 9999, lineHeight: 1.6, flexShrink: 0,
+            }}>{page.badge}</span>
+          )}
+
+          {/* Star — favourite toggle */}
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleFavorite(page.id); }}
+            title={page.favorite ? 'Remove from Favorites' : 'Add to Favorites'}
+            className="page-star"
+            style={{
+              width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 4, border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0,
+              color: page.favorite ? '#f5c518' : 'var(--color-text-muted)',
+              opacity: page.favorite ? 1 : 0, transition: 'opacity 80ms, color 80ms',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#f5c518'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = page.favorite ? '#f5c518' : 'var(--color-text-muted)'; }}
+          >
+            {page.favorite ? <IconStarFilled size={12} /> : <IconStar size={12} />}
+          </button>
+        </div>
+
+        {editPageId === page.id && editAnchor && (
+          <PageEditPopover
+            name={page.title}
+            icon={page.icon}
+            iconColor={color}
+            anchorRect={editAnchor}
+            onChangeName={(t) => updatePage(page.id, { title: t })}
+            onChangeIcon={(i) => updatePage(page.id, { icon: i })}
+            onChangeColor={(c) => updatePage(page.id, { iconColor: c })}
+            onClose={() => setEditPageId(null)}
+          />
+        )}
+      </div>
+    );
   };
 
   if (sidebarCollapsed) {
@@ -274,7 +391,7 @@ export function Sidebar() {
       {/* Nav */}
       <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 8px', display: 'flex', flexDirection: 'column', gap: 1 }}>
         {/* Reorderable fixed nav items */}
-        {sidebarNavOrder.map((key, idx) => {
+        {sidebarNavOrder.map((key) => {
           const item = NAV_ITEMS[key];
           if (!item) return null;
           const activePaths: Record<string, boolean> = {
@@ -284,38 +401,25 @@ export function Sidebar() {
             'revenue-split': pathname === '/revenue-split',
           };
           const active = activePaths[key] ?? false;
+          const isDragOver = dragOverNavKey === key && draggedNavKey !== key;
+          const isDragging = draggedNavKey === key;
           return (
-            <div key={key} style={{ position: 'relative' }}
-              onMouseEnter={(e) => {
-                const btns = e.currentTarget.querySelectorAll<HTMLElement>('.nav-order-btn');
-                btns.forEach((b) => { b.style.opacity = '1'; });
-              }}
-              onMouseLeave={(e) => {
-                const btns = e.currentTarget.querySelectorAll<HTMLElement>('.nav-order-btn');
-                btns.forEach((b) => { b.style.opacity = '0'; });
+            <div
+              key={key}
+              draggable
+              onDragStart={(e) => { setDraggedNavKey(key); e.dataTransfer.effectAllowed = 'move'; }}
+              onDragOver={(e) => { e.preventDefault(); if (draggedNavKey && draggedNavKey !== key) setDragOverNavKey(key); }}
+              onDragLeave={() => { if (dragOverNavKey === key) setDragOverNavKey(null); }}
+              onDrop={(e) => { e.preventDefault(); if (draggedNavKey && draggedNavKey !== key) reorderNavItem(draggedNavKey, key); setDraggedNavKey(null); setDragOverNavKey(null); }}
+              onDragEnd={() => { setDraggedNavKey(null); setDragOverNavKey(null); }}
+              style={{
+                position: 'relative',
+                borderTop: isDragOver ? '2px solid var(--color-accent-bright)' : '2px solid transparent',
+                opacity: isDragging ? 0.4 : 1,
+                cursor: 'grab',
               }}
             >
               <NavItem icon={item.icon} label={item.label} active={active} onClick={() => router.push(item.path)} />
-              <div style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 1, zIndex: 10 }}>
-                {idx > 0 && (
-                  <button
-                    className="nav-order-btn"
-                    onClick={(e) => { e.stopPropagation(); moveNavItem(key, -1); }}
-                    style={{ opacity: 0, width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: 3, background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', padding: 0, transition: 'opacity 80ms' }}
-                  >
-                    <IconChevronUp size={10} />
-                  </button>
-                )}
-                {idx < sidebarNavOrder.length - 1 && (
-                  <button
-                    className="nav-order-btn"
-                    onClick={(e) => { e.stopPropagation(); moveNavItem(key, 1); }}
-                    style={{ opacity: 0, width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: 3, background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', padding: 0, transition: 'opacity 80ms' }}
-                  >
-                    <IconChevronDown size={10} />
-                  </button>
-                )}
-              </div>
             </div>
           );
         })}
@@ -384,113 +488,29 @@ export function Sidebar() {
 
           {/* Pages */}
           {hqExpanded && <div style={{ paddingLeft: 4 }}>
-            {hqPages.map((page) => {
-              const active = isActive(page.slug);
-              const color = page.iconColor ?? '#4f6fff';
-              const isDragOver = dragOverPageId === page.id && draggedPageId !== page.id;
-              return (
-                <div
-                  key={page.id}
-                  style={{ position: 'relative', borderTop: isDragOver ? '2px solid var(--color-accent-bright)' : '2px solid transparent', opacity: draggedPageId === page.id ? 0.4 : 1 }}
-                  draggable
-                  onDragStart={(e) => { setDraggedPageId(page.id); e.dataTransfer.effectAllowed = 'move'; }}
-                  onDragOver={(e) => { e.preventDefault(); if (draggedPageId && draggedPageId !== page.id) setDragOverPageId(page.id); }}
-                  onDragLeave={() => setDragOverPageId((cur) => (cur === page.id ? null : cur))}
-                  onDrop={(e) => { e.preventDefault(); if (draggedPageId && draggedPageId !== page.id) movePage(draggedPageId, page.id); setDraggedPageId(null); setDragOverPageId(null); }}
-                  onDragEnd={() => { setDraggedPageId(null); setDragOverPageId(null); }}
-                >
-                  <div
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px 3px 4px',
-                      borderRadius: 6, fontSize: 'var(--text-sm)', userSelect: 'none',
-                      background: active ? 'var(--color-bg-active)' : 'transparent',
-                      borderLeft: active ? `2px solid ${color}` : '2px solid transparent',
-                      transition: 'background 100ms ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!active) e.currentTarget.style.background = 'var(--color-bg-hover)';
-                      const star = e.currentTarget.querySelector('.page-star') as HTMLElement | null;
-                      if (star) star.style.opacity = '1';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!active) e.currentTarget.style.background = 'transparent';
-                      const star = e.currentTarget.querySelector('.page-star') as HTMLElement | null;
-                      if (star && !page.favorite) star.style.opacity = '0';
-                    }}
-                  >
-                    {/* Icon button — opens edit popover */}
-                    <button
-                      onClick={(e) => openEdit(e, page.id)}
-                      title="Edit icon, colour & name"
-                      style={{
-                        width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        borderRadius: 5, border: 'none', background: 'none',
-                        cursor: 'pointer', flexShrink: 0, transition: 'background 80ms',
-                        color,
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-active)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                    >
-                      {page.is_active
-                        ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-green)', display: 'block' }} />
-                        : <PageIcon name={page.icon} size={14} />
-                      }
-                    </button>
-
-                    {/* Title — navigates */}
-                    <span
-                      onClick={() => navigate(page.slug)}
-                      style={{
-                        flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        cursor: 'pointer', color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                        fontSize: 'var(--text-sm)',
-                      }}
-                    >
-                      {page.title}
-                    </span>
-
-                    {page.badge && (
-                      <span style={{
-                        background: color, color: '#fff', fontSize: 10,
-                        fontWeight: 600, padding: '1px 5px', borderRadius: 9999, lineHeight: 1.6, flexShrink: 0,
-                      }}>{page.badge}</span>
-                    )}
-
-                    {/* Star — favourite toggle (always shown if favourited, on hover otherwise) */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleFavorite(page.id); }}
-                      title={page.favorite ? 'Remove from Favorites' : 'Add to Favorites'}
-                      className="page-star"
-                      style={{
-                        width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        borderRadius: 4, border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0,
-                        color: page.favorite ? '#f5c518' : 'var(--color-text-muted)',
-                        opacity: page.favorite ? 1 : 0, transition: 'opacity 80ms, color 80ms',
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = '#f5c518'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.color = page.favorite ? '#f5c518' : 'var(--color-text-muted)'; }}
-                    >
-                      {page.favorite ? <IconStarFilled size={12} /> : <IconStar size={12} />}
-                    </button>
-                  </div>
-
-                  {editPageId === page.id && editAnchor && (
-                    <PageEditPopover
-                      name={page.title}
-                      icon={page.icon}
-                      iconColor={color}
-                      anchorRect={editAnchor}
-                      onChangeName={(t) => updatePage(page.id, { title: t })}
-                      onChangeIcon={(i) => updatePage(page.id, { icon: i })}
-                      onChangeColor={(c) => updatePage(page.id, { iconColor: c })}
-                      onClose={() => setEditPageId(null)}
-                    />
-                  )}
-                </div>
-              );
-            })}
+            {hqPages.map(renderPageRow)}
           </div>}
         </div>
+
+        {/* Financial Statements — P&L, Cash Flow & Balance Sheet */}
+        {financialPages.length > 0 && (
+          <div style={{ marginBottom: 4 }}>
+            <div className="section-header" style={{ marginTop: 16 }}>Financial Statements</div>
+            <div style={{ paddingLeft: 4 }}>
+              {financialPages.map(renderPageRow)}
+            </div>
+          </div>
+        )}
+
+        {/* Ventures — Consulting & ClubCrowd live outside the HQ teamspace flow */}
+        {venturePages.length > 0 && (
+          <div style={{ marginBottom: 4 }}>
+            <div className="section-header" style={{ marginTop: 16 }}>Ventures</div>
+            <div style={{ paddingLeft: 4 }}>
+              {venturePages.map(renderPageRow)}
+            </div>
+          </div>
+        )}
 
         {/* Private — the current user's private pages (only they can see these) */}
         <div className="section-header" style={{ marginTop: 16 }}>Private</div>

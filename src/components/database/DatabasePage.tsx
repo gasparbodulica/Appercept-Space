@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Database, ViewType, ViewConfig } from '@/lib/types';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { PageIcon } from '@/lib/icons';
@@ -9,6 +9,7 @@ import { Topbar } from '@/components/layout/Topbar';
 import { TableView } from './TableView';
 import { BoardView } from './BoardView';
 import { CalendarView } from './CalendarView';
+import { GalleryView } from './GalleryView';
 import { ConsultingDashboard } from './ConsultingDashboard';
 import { FilterPanel } from './FilterPanel';
 import { SortPanel } from './SortPanel';
@@ -40,14 +41,26 @@ let _vid = 2000;
 export function DatabasePage({ database, pageTitle, pageIcon, pageIconColor, pageId }: DatabasePageProps) {
   const { updatePage, addView, updateView, updateColumn } = useAppStore();
   const isAdmin = useCurrentAccount()?.role === 'admin';
-  const [activeViewId, setActiveViewId] = useState(database.views[0]?.id ?? '');
+
+  // Block-first: if this DB leads with a plain table, inject a Gallery view as the
+  // default so every database renders as cards. The table stays available as a tab.
+  const views = useMemo<ViewConfig[]>(() => {
+    if (database.views[0]?.type !== 'table') return database.views;
+    const gallery: ViewConfig = {
+      id: `${database.id}-gallery`, database_id: database.id, name: 'Gallery',
+      type: 'gallery', icon: 'IconLayoutGrid', filters: [], sorts: [], hidden_cols: [], is_default: true,
+    };
+    return [gallery, ...database.views];
+  }, [database.views, database.id]);
+
+  const [activeViewId, setActiveViewId] = useState(views[0]?.id ?? '');
   const [editAnchor, setEditAnchor] = useState<DOMRect | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [propsOpen, setPropsOpen] = useState(false);
   const [addViewOpen, setAddViewOpen] = useState(false);
 
-  const activeView = database.views.find(v => v.id === activeViewId) ?? database.views[0];
+  const activeView = views.find(v => v.id === activeViewId) ?? views[0];
   const filterCount = activeView?.filters?.length ?? 0;
   const sortCount = activeView?.sorts?.length ?? 0;
 
@@ -106,7 +119,7 @@ export function DatabasePage({ database, pageTitle, pageIcon, pageIconColor, pag
 
         {/* Toolbar: view tabs + actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, borderBottom: '0.5px solid var(--color-border-subtle)' }}>
-          {database.views.map(view => (
+          {views.map(view => (
             <ViewTab key={view.id} view={view} active={view.id === activeViewId} onClick={() => setActiveViewId(view.id)} />
           ))}
 
@@ -239,7 +252,10 @@ export function DatabasePage({ database, pageTitle, pageIcon, pageIconColor, pag
         {activeView?.type === 'dashboard' && activeView && (
           <ConsultingDashboard database={database} />
         )}
-        {activeView && !['table','board','calendar','dashboard'].includes(activeView.type) && (
+        {(activeView?.type === 'gallery' || activeView?.type === 'list') && activeView && (
+          <GalleryView database={database} view={activeView} />
+        )}
+        {activeView && !['table','board','calendar','dashboard','gallery','list'].includes(activeView.type) && (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--color-text-muted)' }}>
             {VIEW_ICONS[activeView.type]}
             <span style={{ fontSize: 'var(--text-sm)' }}>{activeView.type.charAt(0).toUpperCase() + activeView.type.slice(1)} view coming soon</span>

@@ -5,9 +5,9 @@ import { useAppStore } from '@/lib/store';
 import { USERS } from '@/lib/seed';
 import { Topbar } from '@/components/layout/Topbar';
 import { WeatherWidget } from '@/components/WeatherWidget';
-import { computeCompanyFinance, computeClientRevenue, computeConsultingRevenue, type CompanyFinance } from '@/lib/finance';
+import { computeCompanyFinance, computeClientRevenue, computeConsultingRevenue, computeClubRevenue, type CompanyFinance } from '@/lib/finance';
 import { TeamCapacityHeatmap } from '@/components/TeamCapacityHeatmap';
-import { IconCircleCheck, IconCircleFilled, IconCalendar, IconFileText, IconCurrencyEuro, IconSun, IconSunset, IconMoon, IconTrendingUp, IconTrendingDown, IconBuildingFactory2, IconAlertTriangle } from '@tabler/icons-react';
+import { IconCircleCheck, IconCircleFilled, IconCalendar, IconFileText, IconCurrencyEuro, IconSun, IconSunset, IconMoon, IconTrendingUp, IconTrendingDown, IconBuildingFactory2, IconAlertTriangle, IconMusic, IconChevronRight, IconBrandStripe } from '@tabler/icons-react';
 import { getStatusConfig, getPriorityConfig, formatDate, formatDateTime, isOverdue } from '@/lib/utils';
 
 const GreetingIcon = () => {
@@ -53,11 +53,44 @@ export default function DashboardPage() {
     const page = pages.find((p) => p.id === db.page_id);
     return page?.slug === 'consulting';
   });
+  const clubcrowdDb = Object.values(databases).find((db) => {
+    const page = pages.find((p) => p.id === db.page_id);
+    return page?.slug === 'clubcrowd';
+  });
 
-  // ── Appercept finances: client retainers + consulting fees − expenses = profit ──
+  // ── Appercept finances: retainers + consulting + club fees − expenses = profit ──
   const { revenue: clientRevenue, activeCount: clientCount } = computeClientRevenue(clientsDb);
   const { revenue: consultingRevenue, count: consultingCount } = computeConsultingRevenue(consultingDb);
-  const finance = computeCompanyFinance(costsDb, 'Appercept', clientRevenue, consultingRevenue);
+  const { monthlyAvg: clubMonthlyAvg } = computeClubRevenue(clubcrowdDb);
+  const finance = computeCompanyFinance(costsDb, 'Appercept', clientRevenue, consultingRevenue, clubMonthlyAvg);
+
+  // ── ClubCrowd snapshot: season-adjusted yearly revenue + pipeline counts ──
+  const clubSeasonMonths = (label: string): number => {
+    if (!label) return 12;
+    if (/year|12/i.test(label)) return 12;
+    const m = label.match(/(\d+)/);
+    return m ? Number(m[1]) : 12;
+  };
+  const ccFeeCol    = clubcrowdDb?.columns.find((c) => c.name === 'Fee / reservation (€)');
+  const ccResCol    = clubcrowdDb?.columns.find((c) => c.name === 'Monthly reservations');
+  const ccSeasonCol = clubcrowdDb?.columns.find((c) => c.name === 'Operating season');
+  const ccStatusCol = clubcrowdDb?.columns.find((c) => c.name === 'Status');
+  const ccStripeCol = clubcrowdDb?.columns.find((c) => c.name === 'Stripe status');
+  const clubRows = clubcrowdDb?.rows ?? [];
+  let clubYearly = 0, clubMonthly = 0;
+  const clubStages: Record<string, number> = { Lead: 0, Onboarding: 0, Active: 0, Past: 0 };
+  let clubConnected = 0;
+  for (const r of clubRows) {
+    const fee = ccFeeCol ? Number(r.cells[ccFeeCol.id]) || 0 : 0;
+    const res = ccResCol ? Number(r.cells[ccResCol.id]) || 0 : 0;
+    const months = ccSeasonCol ? clubSeasonMonths(String(r.cells[ccSeasonCol.id] ?? '')) : 12;
+    const monthly = fee * res;
+    clubMonthly += monthly;
+    clubYearly += monthly * months;
+    const stage = ccStatusCol ? String(r.cells[ccStatusCol.id] ?? '') : '';
+    if (stage in clubStages) clubStages[stage]++;
+    if (ccStripeCol && String(r.cells[ccStripeCol.id] ?? '') === 'Connected') clubConnected++;
+  }
 
   const todoRows = todoDb?.rows ?? [];
   const clientRows = clientsDb?.rows ?? [];
@@ -65,9 +98,12 @@ export default function DashboardPage() {
   const meetingRows = meetingsDb?.rows ?? [];
   const costRows = costsDb?.rows ?? [];
 
-  // Stats — find column dynamically so hardcoded IDs don't break
+  // Stats — find column dynamically so hardcoded IDs don't break.
+  // Active clients = active rows in the Clients DB + active clubs in ClubCrowd
+  // (the two databases stay separate; this just totals them for the snapshot).
   const statusColClients = clientsDb?.columns.find((c) => c.name === 'Status');
-  const activeClients = clientRows.filter((r) => statusColClients ? r.cells[statusColClients.id] === 'Active' : false).length;
+  const activeClientRows = clientRows.filter((r) => statusColClients ? r.cells[statusColClients.id] === 'Active' : false).length;
+  const activeClients = activeClientRows + clubStages.Active;
   const openProjects = projectRows.filter((r) => {
     const status = r.cells['col-projects-status'];
     return status === 'In progress' || status === 'Not started';
@@ -131,10 +167,10 @@ export default function DashboardPage() {
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 40 }}>
           {[
-            { label: 'Active clients', value: activeClients, color: 'var(--color-green)' },
-            { label: 'Open projects', value: openProjects, color: 'var(--color-accent)' },
-            { label: `Profit ${finance.monthLabel.slice(0,3)}`, value: `€${(finance.profit / 1000).toFixed(1)}k`, color: finance.profit >= 0 ? 'var(--color-green)' : 'var(--color-red)' },
-            { label: 'Tasks overdue', value: overdueTasks, color: overdueTasks > 0 ? 'var(--color-red)' : 'var(--color-gray)' },
+            { label: 'Active clients', value: activeClients, color: 'var(--color-green)', sub: clubStages.Active > 0 ? `${activeClientRows} clients · ${clubStages.Active} clubs` : undefined },
+            { label: 'Open projects', value: openProjects, color: 'var(--color-accent)', sub: undefined },
+            { label: `Profit ${finance.monthLabel.slice(0,3)}`, value: `€${(finance.profit / 1000).toFixed(1)}k`, color: finance.profit >= 0 ? 'var(--color-green)' : 'var(--color-red)', sub: undefined },
+            { label: 'Tasks overdue', value: overdueTasks, color: overdueTasks > 0 ? 'var(--color-red)' : 'var(--color-gray)', sub: undefined },
           ].map((stat) => (
             <div key={stat.label} style={{
               background: 'var(--color-bg-elevated)',
@@ -145,12 +181,25 @@ export default function DashboardPage() {
             }}>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: stat.color, lineHeight: 1 }}>{stat.value}</div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{stat.label}</div>
+              {stat.sub && <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 3 }}>{stat.sub}</div>}
             </div>
           ))}
         </div>
 
         {/* Appercept finances — revenue minus costs = monthly profit */}
         <ApperceptFinanceBox f={finance} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} />
+
+        {/* ClubCrowd snapshot */}
+        {clubRows.length > 0 && (
+          <ClubCrowdSnapshot
+            yearly={clubYearly}
+            monthly={clubMonthly}
+            stages={clubStages}
+            connected={clubConnected}
+            total={clubRows.length}
+            onOpen={() => router.push('/pages/clubcrowd')}
+          />
+        )}
 
         {/* Team Capacity Heatmap */}
         <div style={{ marginBottom: 40 }}>
@@ -289,15 +338,88 @@ function fmt(n: number) {
   return `€${Math.round(n).toLocaleString('en-US')}`;
 }
 
+const STAGE_COLORS: Record<string, string> = {
+  Lead: '#60a5fa', Onboarding: '#f5a623', Active: '#3ecf8e', Past: '#6b7280',
+};
+
+function ClubCrowdSnapshot({ yearly, monthly, stages, connected, total, onOpen }: {
+  yearly: number; monthly: number; stages: Record<string, number>; connected: number; total: number; onOpen: () => void;
+}) {
+  return (
+    <div
+      onClick={onOpen}
+      style={{
+        background: 'linear-gradient(135deg, rgba(99,91,255,0.14) 0%, rgba(167,139,250,0.06) 45%, var(--color-bg-elevated) 100%)',
+        border: '0.5px solid rgba(99,91,255,0.3)',
+        borderRadius: 'var(--card-radius)',
+        padding: '20px 24px', marginBottom: 40, cursor: 'pointer',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+        transition: 'border-color 120ms, box-shadow 120ms, transform 120ms',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#635bff'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(99,91,255,0.25)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(99,91,255,0.3)'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(0,0,0,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+    >
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg, #635bff, #a78bfa)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 2px 10px rgba(99,91,255,0.4)' }}>
+          <IconMusic size={17} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)' }}>ClubCrowd</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{total} venues · reservation-fee revenue at a glance</div>
+        </div>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 'var(--text-xs)', color: 'var(--color-accent-bright)', fontWeight: 600 }}>
+          Open <IconChevronRight size={14} />
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24, alignItems: 'center' }}>
+        {/* Left: headline figures */}
+        <div style={{ display: 'flex', gap: 28 }}>
+          <div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: '#3ecf8e', lineHeight: 1 }}>{fmt(yearly)}</div>
+            <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 5 }}>Real yearly revenue</div>
+            <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2 }}>season-adjusted</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: '#7c75ff', lineHeight: 1 }}>{fmt(monthly)}</div>
+            <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 5 }}>Peak monthly</div>
+            <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2 }}>all clubs in-season</div>
+          </div>
+        </div>
+
+        {/* Right: pipeline + stripe */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+            {(['Active', 'Onboarding', 'Lead', 'Past'] as const).map((stage) => (
+              stages[stage] > 0 && (
+                <span key={stage} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, background: `${STAGE_COLORS[stage]}1a`, color: STAGE_COLORS[stage], fontSize: 'var(--text-xs)', fontWeight: 600 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: STAGE_COLORS[stage] }} />
+                  {stages[stage]} {stage}
+                </span>
+              )
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-xs)', color: connected > 0 ? 'var(--color-green)' : 'var(--color-text-muted)' }}>
+            <IconBrandStripe size={13} />
+            {connected} / {total} venues connected to Stripe
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ApperceptFinanceBox({ f, clientCount, consultingCount, onOpenCosts }: { f: CompanyFinance; clientCount: number; consultingCount: number; onOpenCosts: () => void }) {
   const profitPositive = f.profit >= 0;
   const profitColor = profitPositive ? 'var(--color-green)' : 'var(--color-red)';
 
   // 4-bar chart: Retainers / Consulting / Costs / Profit
-  const scaleMax = Math.max(1, f.revenue, f.consultingRevenue, f.expenses, Math.abs(f.profit));
+  const scaleMax = Math.max(1, f.revenue, f.consultingRevenue, f.clubRevenue, f.expenses, Math.abs(f.profit));
   const bars = [
     { label: 'Retainers', value: f.revenue, color: 'var(--color-teal)', solid: 'rgba(0,210,255,0.55)' },
     { label: 'Consulting', value: f.consultingRevenue, color: '#a78bfa', solid: 'rgba(167,139,250,0.55)' },
+    { label: 'Clubs', value: f.clubRevenue, color: '#635bff', solid: 'rgba(99,91,255,0.55)' },
     { label: 'Costs', value: f.expenses, color: 'var(--color-red)', solid: 'rgba(255,79,106,0.55)' },
     { label: 'Profit', value: f.profit, color: profitColor, gradient: true },
   ];
@@ -317,7 +439,7 @@ function ApperceptFinanceBox({ f, clientCount, consultingCount, onOpenCosts }: {
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Appercept · {f.monthLabel} finances</div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Client retainers + consulting fees − {f.expenseCount} costs, calculated automatically</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Retainers + consulting + club fees − {f.expenseCount} costs, calculated automatically</div>
         </div>
         <button onClick={onOpenCosts}
           style={{ padding: '6px 12px', borderRadius: 7, border: '0.5px solid var(--color-border-strong)', background: 'var(--color-bg-active)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer' }}
@@ -331,8 +453,9 @@ function ApperceptFinanceBox({ f, clientCount, consultingCount, onOpenCosts }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center' }}>
           <FinanceRow label="Client retainers" value={fmt(f.revenue)} color="var(--color-teal)" sub={`${clientCount} paying client${clientCount !== 1 ? 's' : ''}`} />
           <FinanceRow label="Consulting fees" value={fmt(f.consultingRevenue)} color="#a78bfa" sub={`${consultingCount} engagement${consultingCount !== 1 ? 's' : ''} this month`} />
+          <FinanceRow label="Club fees (ClubCrowd)" value={fmt(f.clubRevenue)} color="#7c75ff" sub="season-adjusted monthly avg" />
           <div style={{ height: '0.5px', background: 'var(--color-border-subtle)', margin: '2px 0' }} />
-          <FinanceRow label="Total revenue" value={fmt(f.totalRevenue)} color="var(--color-accent-bright)" sub="retainers + consulting" />
+          <FinanceRow label="Total revenue" value={fmt(f.totalRevenue)} color="var(--color-accent-bright)" sub="retainers + consulting + clubs" />
           <FinanceRow label="Costs taken out" value={`− ${fmt(f.expenses)}`} color="var(--color-red)" sub={`${f.expenseCount} cost${f.expenseCount !== 1 ? 's' : ''} this month`} />
           <div style={{ height: '0.5px', background: 'var(--color-border-default)' }} />
           <div>

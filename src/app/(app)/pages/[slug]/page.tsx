@@ -1,16 +1,19 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useAppStore } from '@/lib/store';
+import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { DatabasePage } from '@/components/database/DatabasePage';
 import { Topbar } from '@/components/layout/Topbar';
 import { PageIcon } from '@/lib/icons';
+import { PageEditPopover } from '@/components/PageEditPopover';
 import { formatDate } from '@/lib/utils';
 import {
   IconTablePlus, IconLock, IconSearch, IconFileTypePdf, IconPresentation,
   IconFileText, IconTable, IconPhoto, IconVideo, IconFileZip, IconFile,
   IconPlus, IconExternalLink, IconMapPin, IconMusic, IconBrandStripe,
   IconCoinEuro, IconArmchair, IconReceipt, IconBolt, IconCircleCheck,
+  IconCalendar,
 } from '@tabler/icons-react';
 
 interface PageProps {
@@ -191,19 +194,34 @@ const STAGE_COLORS: Record<string, string> = {
   Lead: '#60a5fa', Onboarding: '#f5a623', Active: '#3ecf8e', Past: '#6b7280',
 };
 
-function ClubCrowdDashboard({ pageId, pageTitle }: { pageId: string; pageTitle: string }) {
-  const { databases, addRow, updateCell, openRow } = useAppStore();
+// Operating season → active months per year (parses "9 months", "Summer (3mo)", "Year-round")
+function seasonMonths(label: string): number {
+  if (!label) return 12;
+  if (/year|12/i.test(label)) return 12;
+  const m = label.match(/(\d+)/);
+  return m ? Number(m[1]) : 12;
+}
+const SEASON_COLORS: Record<string, string> = {
+  'Year-round': '#3ecf8e', '9 months': '#60a5fa', '6 months': '#f5a623', 'Summer (3mo)': '#f472b6',
+};
+
+function ClubCrowdDashboard({ pageId, pageTitle, pageIcon, pageIconColor }: { pageId: string; pageTitle: string; pageIcon: string; pageIconColor?: string }) {
+  const { databases, addRow, updateCell, openRow, updatePage } = useAppStore();
+  const isAdmin = useCurrentAccount()?.role === 'admin';
   const db = Object.values(databases).find(d => d.page_id === pageId);
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [connecting, setConnecting] = useState<string | null>(null);
   const [stripeNotice, setStripeNotice] = useState('');
+  const [editAnchor, setEditAnchor] = useState<DOMRect | null>(null);
+  const iconColor = pageIconColor ?? '#a78bfa';
 
   const venueCol  = db?.columns.find(c => c.name === 'Venue name');
   const cityCol   = db?.columns.find(c => c.name === 'City');
   const feeCol    = db?.columns.find(c => c.name === 'Fee / reservation (€)');
   const resCol    = db?.columns.find(c => c.name === 'Monthly reservations');
   const spendCol  = db?.columns.find(c => c.name === 'Avg table spend (€)');
+  const seasonCol = db?.columns.find(c => c.name === 'Operating season');
   const stripeIdCol = db?.columns.find(c => c.name === 'Stripe Account ID');
   const stripeStCol = db?.columns.find(c => c.name === 'Stripe status');
   const joinedCol = db?.columns.find(c => c.name === 'Platform joined');
@@ -213,19 +231,23 @@ function ClubCrowdDashboard({ pageId, pageTitle }: { pageId: string; pageTitle: 
     const fee = feeCol ? Number(r.cells[feeCol.id] ?? 0) : 0;
     const reservations = resCol ? Number(r.cells[resCol.id] ?? 0) : 0;
     const avgSpend = spendCol ? Number(r.cells[spendCol.id] ?? 0) : 0;
+    const season = seasonCol ? String(r.cells[seasonCol.id] ?? 'Year-round') : 'Year-round';
+    const months = seasonMonths(season);
+    const revenue = fee * reservations;             // Appercept's monthly revenue from this venue
     return {
       id:           r.id,
       name:         venueCol  ? String(r.cells[venueCol.id]  ?? '') : '',
       city:         cityCol   ? String(r.cells[cityCol.id]   ?? '') : '',
-      fee, reservations, avgSpend,
-      revenue:      fee * reservations,            // Appercept's monthly revenue from this venue
+      fee, reservations, avgSpend, season, months,
+      revenue,
+      yearlyRevenue: revenue * months,              // real yearly revenue, season-adjusted
       gmv:          avgSpend * reservations,        // total table spend flowing through the venue
       stripeId:     stripeIdCol ? String(r.cells[stripeIdCol.id] ?? '') : '',
       stripeStatus: stripeStCol ? String(r.cells[stripeStCol.id] ?? '') : 'Disconnected',
       joined:       joinedCol ? String(r.cells[joinedCol.id] ?? '') : '',
       status:       statusCol ? String(r.cells[statusCol.id] ?? '') : '',
     };
-  }), [db, venueCol, cityCol, feeCol, resCol, spendCol, stripeIdCol, stripeStCol, joinedCol, statusCol]);
+  }), [db, venueCol, cityCol, feeCol, resCol, spendCol, seasonCol, stripeIdCol, stripeStCol, joinedCol, statusCol]);
 
   const filtered = useMemo(() => venues.filter(v => {
     const matchFilter = filter === 'All' ? true : v.status === filter;
@@ -236,7 +258,8 @@ function ClubCrowdDashboard({ pageId, pageTitle }: { pageId: string; pageTitle: 
   const countByStage = (stage: string) => venues.filter(v => v.status === stage).length;
 
   // Aggregate stats
-  const totalRevenue   = venues.reduce((s, v) => s + v.revenue, 0);
+  const totalRevenue   = venues.reduce((s, v) => s + v.revenue, 0);        // peak monthly (all in-season)
+  const totalYearly    = venues.reduce((s, v) => s + v.yearlyRevenue, 0);  // real season-adjusted yearly
   const totalGMV       = venues.reduce((s, v) => s + v.gmv, 0);
   const totalRes       = venues.reduce((s, v) => s + v.reservations, 0);
   const connectedCount = venues.filter(v => v.stripeStatus === 'Connected').length;
@@ -285,10 +308,26 @@ function ClubCrowdDashboard({ pageId, pageTitle }: { pageId: string; pageTitle: 
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg, #635bff, #a78bfa)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 16px rgba(99,91,255,0.4)' }}>
-              <IconMusic size={20} />
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
+            <button
+              onClick={(e) => { if (!isAdmin) return; setEditAnchor(editAnchor ? null : (e.currentTarget as HTMLElement).getBoundingClientRect()); }}
+              title={isAdmin ? 'Edit icon, colour & name' : undefined}
+              style={{ width: 40, height: 40, borderRadius: 11, background: `linear-gradient(135deg, ${iconColor}, ${iconColor}99)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: `0 4px 16px ${iconColor}55`, border: 'none', cursor: isAdmin ? 'pointer' : 'default', flexShrink: 0 }}
+            >
+              <PageIcon name={pageIcon} size={20} />
+            </button>
+            {isAdmin && editAnchor && (
+              <PageEditPopover
+                name={pageTitle}
+                icon={pageIcon}
+                iconColor={iconColor}
+                anchorRect={editAnchor}
+                onChangeName={(t) => updatePage(pageId, { title: t })}
+                onChangeIcon={(i) => updatePage(pageId, { icon: i })}
+                onChangeColor={(c) => updatePage(pageId, { iconColor: c })}
+                onClose={() => setEditAnchor(null)}
+              />
+            )}
             <div>
               <h1 style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>{pageTitle}</h1>
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: 0, marginTop: 2 }}>{venues.length} venues · we earn a fee on every table reservation</p>
@@ -302,12 +341,16 @@ function ClubCrowdDashboard({ pageId, pageTitle }: { pageId: string; pageTitle: 
         {/* Revenue stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           {[
-            { label: 'Our monthly revenue', value: fmtEur(totalRevenue),       color: '#635bff', icon: <IconCoinEuro size={14} />, hint: 'fees from all venues' },
+            { label: 'Real yearly revenue',  value: fmtEur(totalYearly),        color: '#3ecf8e', icon: <IconCoinEuro size={14} />, hint: 'season-adjusted, all clubs', highlight: true },
+            { label: 'Peak monthly revenue', value: fmtEur(totalRevenue),       color: '#635bff', icon: <IconReceipt size={14} />,  hint: 'when all clubs in-season' },
             { label: 'Reservations / mo',    value: totalRes.toLocaleString(),  color: '#a78bfa', icon: <IconArmchair size={14} />, hint: 'across all clubs' },
-            { label: 'Total table volume',   value: fmtEur(totalGMV),           color: '#f472b6', icon: <IconReceipt size={14} />, hint: 'GMV through platform' },
-            { label: 'Stripe connected',     value: `${connectedCount}/${venues.length}`, color: '#3ecf8e', icon: <IconBrandStripe size={14} />, hint: 'venues paying out' },
+            { label: 'Stripe connected',     value: `${connectedCount}/${venues.length}`, color: '#f472b6', icon: <IconBrandStripe size={14} />, hint: 'venues paying out' },
           ].map(s => (
-            <div key={s.label} style={{ background: 'rgba(10,20,38,0.4)', border: '0.5px solid rgba(99,91,255,0.2)', borderRadius: 10, padding: '12px 14px', backdropFilter: 'blur(4px)' }}>
+            <div key={s.label} style={{
+              background: s.highlight ? 'rgba(46,232,154,0.10)' : 'rgba(10,20,38,0.4)',
+              border: `0.5px solid ${s.highlight ? 'rgba(46,232,154,0.35)' : 'rgba(99,91,255,0.2)'}`,
+              borderRadius: 10, padding: '12px 14px', backdropFilter: 'blur(4px)',
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, color: s.color }}>{s.icon}<span style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>{s.label}</span></div>
               <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
               <div style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 3 }}>{s.hint}</div>
@@ -395,9 +438,16 @@ function ClubCrowdDashboard({ pageId, pageTitle }: { pageId: string; pageTitle: 
                         <div style={{ fontSize: 'var(--text-md)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</div>
                         {v.city && <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 2 }}><IconMapPin size={11} />{v.city}</div>}
                       </div>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 20, background: `${statusColor}18`, color: statusColor, fontSize: 10, fontWeight: 600, flexShrink: 0 }}>
-                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: statusColor }} />{v.status || '—'}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 20, background: `${statusColor}18`, color: statusColor, fontSize: 10, fontWeight: 600 }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: statusColor }} />{v.status || '—'}
+                        </span>
+                        {v.season && (() => { const sc = SEASON_COLORS[v.season] ?? '#6b7280'; return (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 20, background: `${sc}18`, color: sc, fontSize: 10, fontWeight: 600 }}>
+                            <IconCalendar size={9} />{v.season}
+                          </span>
+                        ); })()}
+                      </div>
                     </div>
 
                     {/* Big revenue number */}
@@ -412,16 +462,16 @@ function ClubCrowdDashboard({ pageId, pageTitle }: { pageId: string; pageTitle: 
                     {/* Mini stats */}
                     <div style={{ display: 'flex', gap: 14, paddingTop: 12, borderTop: '0.5px solid var(--color-border-subtle)' }}>
                       <div>
+                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#3ecf8e', lineHeight: 1 }}>{fmtEur(v.yearlyRevenue)}</div>
+                        <div style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 2 }}>yearly · {v.months}mo</div>
+                      </div>
+                      <div>
                         <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1 }}>{v.reservations.toLocaleString()}</div>
                         <div style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 2 }}>reservations</div>
                       </div>
                       <div>
                         <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1 }}>{fmtEur(v.gmv)}</div>
                         <div style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 2 }}>table volume</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1 }}>{fmtEur(v.avgSpend)}</div>
-                        <div style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 2 }}>avg / table</div>
                       </div>
                     </div>
                   </div>
@@ -456,9 +506,26 @@ function ClubCrowdDashboard({ pageId, pageTitle }: { pageId: string; pageTitle: 
 // ── Main slug page ────────────────────────────────────────────────────────────
 export default function SlugPage({ params }: PageProps) {
   const { slug } = params;
+  const router = useRouter();
   const { pages, databases, currentUserId } = useAppStore();
 
+  // Team & Roles is now merged into the Team & Revenue page (Revenue Split)
+  useEffect(() => {
+    if (slug === 'team') router.replace('/revenue-split');
+  }, [slug, router]);
+
   const page = pages.find((p) => p.slug === slug);
+
+  if (slug === 'team') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Topbar breadcrumb={['Team & Revenue']} />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
+          Opening Team &amp; Revenue…
+        </div>
+      </div>
+    );
+  }
 
   if (page && page.owner_id && page.owner_id !== currentUserId) {
     return (
@@ -503,7 +570,7 @@ export default function SlugPage({ params }: PageProps) {
 
   // ClubCrowd gets a venue dashboard
   if (slug === 'clubcrowd') {
-    return <ClubCrowdDashboard pageId={page.id} pageTitle={page.title} />;
+    return <ClubCrowdDashboard pageId={page.id} pageTitle={page.title} pageIcon={page.icon} pageIconColor={page.iconColor} />;
   }
 
   return (

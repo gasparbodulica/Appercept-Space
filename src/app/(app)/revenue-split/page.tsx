@@ -23,9 +23,10 @@ function ShareCard({ role, onChange, onDelete }: {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(role.name);
   const [title, setTitle] = useState(role.role_title);
+  const [email, setEmail] = useState(role.email ?? '');
   const [share, setShare] = useState(role.default_share);
 
-  const save = () => { onChange({ name, role_title: title, default_share: Math.max(0, Math.min(100, Number(share))) }); setEditing(false); };
+  const save = () => { onChange({ name, role_title: title, email: email.trim() || undefined, default_share: Math.max(0, Math.min(100, Number(share))) }); setEditing(false); };
   const initials = role.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
   if (editing) {
@@ -34,6 +35,8 @@ function ShareCard({ role, onChange, onDelete }: {
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Name"
           style={{ padding: '7px 10px', borderRadius: 7, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', outline: 'none' }} />
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Role title"
+          style={{ padding: '7px 10px', borderRadius: 7, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', outline: 'none' }} />
+        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email (optional)" type="email"
           style={{ padding: '7px 10px', borderRadius: 7, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', outline: 'none' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <label style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', flexShrink: 0 }}>Default %</label>
@@ -61,6 +64,7 @@ function ShareCard({ role, onChange, onDelete }: {
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{role.name}</div>
           <div style={{ fontSize: 10, color: role.is_external ? '#fb923c' : 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{role.role_title}{role.is_external ? ' · External' : ''}</div>
+          {role.email && <div style={{ fontSize: 10, color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>{role.email}</div>}
         </div>
       </div>
       {/* Big % */}
@@ -118,9 +122,32 @@ function CompanyCard({ pct, onChange }: { pct: number; onChange: (v: number) => 
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function RevenueSplitPage() {
-  const { teamRoles, projectShares, companyRetentionPct, databases, pages,
+  const { teamRoles, projectShares, companyRetentionPct, databases, pages, users, accounts,
     addTeamRole, updateTeamRole, deleteTeamRole, setCompanyRetentionPct,
     addProjectShare, deleteProjectShare } = useAppStore();
+
+  // Existing workspace members not yet in the revenue split (by name/email match)
+  const availableMembers = useMemo(() => {
+    const taken = new Set(teamRoles.flatMap(r => [r.name.toLowerCase(), (r.email ?? '').toLowerCase()].filter(Boolean)));
+    const seen = new Set<string>();
+    const list: { name: string; email: string; role: string; color: string; initials: string; user_id?: string }[] = [];
+    // Workspace users first
+    for (const u of users) {
+      const key = u.email.toLowerCase();
+      if (taken.has(u.name.toLowerCase()) || taken.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      list.push({ name: u.name, email: u.email, role: u.role === 'admin' ? 'Admin' : 'Member', color: u.color, initials: u.initials, user_id: u.id });
+    }
+    // Approved non-client accounts that aren't already covered
+    for (const a of accounts) {
+      if (!a.approved || a.role === 'client') continue;
+      const key = a.email.toLowerCase();
+      if (taken.has(a.name.toLowerCase()) || taken.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      list.push({ name: a.name, email: a.email, role: a.role.charAt(0).toUpperCase() + a.role.slice(1), color: a.color, initials: a.initials });
+    }
+    return list;
+  }, [teamRoles, users, accounts]);
 
   // Consulting DB for quick-fill
   const consultingDb = Object.values(databases).find(d => pages.some(p => p.id === d.page_id && p.slug === 'consulting'));
@@ -196,24 +223,29 @@ export default function RevenueSplitPage() {
   const [showAddRole, setShowAddRole] = useState(false);
   const [newName, setNewName] = useState('');
   const [newTitle, setNewTitle] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [newShare, setNewShare] = useState(10);
   const [newExternal, setNewExternal] = useState(false);
   const [newColor, setNewColor] = useState(ROLE_COLORS[4]);
   const addRole = () => {
     if (!newName.trim()) return;
-    addTeamRole({ name: newName.trim(), role_title: newTitle || 'Team member', default_share: newShare, is_external: newExternal, color: newColor, user_id: undefined });
-    setNewName(''); setNewTitle(''); setNewShare(10); setNewExternal(false); setShowAddRole(false);
+    addTeamRole({ name: newName.trim(), role_title: newTitle || 'Team member', email: newEmail.trim() || undefined, default_share: newShare, is_external: newExternal, color: newColor, user_id: undefined });
+    setNewName(''); setNewTitle(''); setNewEmail(''); setNewShare(10); setNewExternal(false); setShowAddRole(false);
+  };
+
+  const addExistingMember = (m: { name: string; email: string; role: string; color: string; user_id?: string }) => {
+    addTeamRole({ name: m.name, role_title: m.role, email: m.email || undefined, default_share: 10, is_external: false, color: m.color, user_id: m.user_id });
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <Topbar breadcrumb={['Revenue Split']} />
+      <Topbar breadcrumb={['Team & Revenue']} />
       <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', background: 'var(--color-bg-base)' }}>
         <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 32 }}>
 
           <div>
-            <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: 6 }}>Revenue Split</h1>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>Set default payout percentages for each team member and calculate distributions per job.</p>
+            <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: 6 }}>Team &amp; Revenue Split</h1>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>Your team, their roles and payout percentages — edit shares here and calculate distributions per job. External collaborators can be added too.</p>
           </div>
 
           {/* ── Default splits grid ── */}
@@ -249,13 +281,38 @@ export default function RevenueSplitPage() {
             {/* Add member form */}
             {showAddRole && (
               <div style={{ marginTop: 14, padding: 16, borderRadius: 12, background: 'var(--color-bg-elevated)', border: '0.5px solid var(--color-border-default)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)' }}>New member</div>
+                {/* Existing workspace members */}
+                {availableMembers.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Add an existing member</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {availableMembers.map(m => (
+                        <button key={m.email || m.name} onClick={() => addExistingMember(m)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px 6px 6px', borderRadius: 20, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-active)', cursor: 'pointer', transition: 'border-color 80ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = m.color; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; }}
+                          title={`Add ${m.name} at 10% (editable)`}>
+                          <span style={{ width: 24, height: 24, borderRadius: '50%', background: m.color, color: '#fff', fontSize: 9, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{m.initials}</span>
+                          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2 }}>
+                            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-primary)' }}>{m.name}</span>
+                            <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>{m.role}</span>
+                          </span>
+                          <IconPlus size={13} style={{ color: m.color, flexShrink: 0 }} />
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ height: '0.5px', background: 'var(--color-border-subtle)', margin: '14px 0 4px' }} />
+                  </div>
+                )}
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)' }}>Or add someone new / external</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Full name"
                     style={{ padding: '7px 10px', borderRadius: 7, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', outline: 'none' }} />
                   <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Role title"
                     style={{ padding: '7px 10px', borderRadius: 7, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', outline: 'none' }} />
                 </div>
+                <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="Email (optional)" type="email"
+                  style={{ padding: '7px 10px', borderRadius: 7, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', outline: 'none' }} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', flexShrink: 0 }}>Share %</span>
                   <input type="range" min={0} max={60} value={newShare} onChange={e => setNewShare(Number(e.target.value))} style={{ flex: 1 }} />

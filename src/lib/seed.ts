@@ -34,10 +34,11 @@ export const PAGES: Page[] = [
   { id: 'p-clients', workspace_id: 'ws-1', title: 'Clients', icon: 'IconUsers', iconColor: '#2ee89a', type: 'clients', position: 2, slug: 'clients' },
   { id: 'p-projects', workspace_id: 'ws-1', title: 'Projects', icon: 'IconFolderOpen', iconColor: '#a78bfa', type: 'projects', position: 3, slug: 'projects' },
   { id: 'p-consulting', workspace_id: 'ws-1', title: 'Consulting', icon: 'IconBriefcase', iconColor: '#00d2ff', type: 'custom', position: 4, slug: 'consulting' },
-  { id: 'p-team', workspace_id: 'ws-1', title: 'Team & Roles', icon: 'IconUserCircle', iconColor: '#2dd4bf', type: 'custom', position: 5, slug: 'team' },
   { id: 'p-meetings', workspace_id: 'ws-1', title: 'Meetings', icon: 'IconCalendar', iconColor: '#fb923c', type: 'meetings', position: 6, slug: 'meetings', badge: 3 },
   { id: 'p-companies', workspace_id: 'ws-1', title: 'Companies', icon: 'IconBuildingFactory2', iconColor: '#60a5fa', type: 'companies', position: 7, slug: 'companies' },
-  { id: 'p-costs', workspace_id: 'ws-1', title: 'Costs', icon: 'IconCurrencyEuro', iconColor: '#f5c518', type: 'costs', position: 8, slug: 'costs' },
+  { id: 'p-costs', workspace_id: 'ws-1', title: 'P&L Account', icon: 'IconCurrencyEuro', iconColor: '#f5c518', type: 'costs', position: 8, slug: 'costs' },
+  { id: 'p-cashflow', workspace_id: 'ws-1', title: 'Cash Flow Statement', icon: 'IconArrowsExchange', iconColor: '#2dd4bf', type: 'custom', position: 8.1, slug: 'cashflow' },
+  { id: 'p-balance', workspace_id: 'ws-1', title: 'Balance Sheet', icon: 'IconScale', iconColor: '#60a5fa', type: 'custom', position: 8.2, slug: 'balance-sheet' },
   { id: 'p-files', workspace_id: 'ws-1', title: 'Files', icon: 'IconFolder', iconColor: '#6b7280', type: 'files', position: 9, slug: 'files' },
   { id: 'p-passwords', workspace_id: 'ws-1', title: 'Passwords', icon: 'IconLock', iconColor: '#ff4f6a', type: 'passwords', position: 10, slug: 'passwords' },
   { id: 'p-clubcrowd', workspace_id: 'ws-1', title: 'ClubCrowd Clients', icon: 'IconMusic', iconColor: '#f472b6', type: 'clubcrowd', position: 11, slug: 'clubcrowd' },
@@ -211,6 +212,45 @@ const COST_ROWS: Row[] = [
   { id: 'costr-6', database_id: 'db-costs', position: 5, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'costc-item': 'Freelance dev payment', 'costc-amount': 800, 'costc-date': '2026-06-03', 'costc-status': 'Not started', 'costc-category': 'Freelance', 'costc-company': 'Appercept', 'costc-frequency': 'One-time' } },
 ];
 
+// ─── CASH FLOW STATEMENT ──────────────────────────────────────────────────────
+const CASHFLOW_COLS: Column[] = [
+  { id: 'cfc-item',    database_id: 'db-cashflow', name: 'Description', type: 'text',   position: 0, config: {}, hidden: false, width: 240 },
+  { id: 'cfc-activity',database_id: 'db-cashflow', name: 'Activity',    type: 'select', position: 1, config: { options: [{ id: 'cfa-op', label: 'Operating', color: '#3ecf8e' }, { id: 'cfa-inv', label: 'Investing', color: '#a78bfa' }, { id: 'cfa-fin', label: 'Financing', color: '#f5a623' }] }, hidden: false, width: 130 },
+  { id: 'cfc-dir',     database_id: 'db-cashflow', name: 'Direction',   type: 'select', position: 2, config: { options: [{ id: 'cfd-in', label: 'Inflow', color: '#3ecf8e' }, { id: 'cfd-out', label: 'Outflow', color: '#ff5c5c' }] }, hidden: false, width: 110 },
+  { id: 'cfc-amount',  database_id: 'db-cashflow', name: 'Amount',      type: 'number', position: 3, config: { prefix: '€' }, hidden: false, width: 120 },
+  { id: 'cfc-date',    database_id: 'db-cashflow', name: 'Date',        type: 'date',   position: 4, config: {}, hidden: false, width: 120 },
+  { id: 'cfc-company', database_id: 'db-cashflow', name: 'Company',     type: 'select', position: 5, config: { options: [{ id: 'cfco-app', label: 'Appercept', color: '#1c75bc' }, { id: 'cfco-egz', label: 'Egzosfera obrt', color: '#2dd4bf' }] }, hidden: false, width: 140 },
+  { id: 'cfc-notes',   database_id: 'db-cashflow', name: 'Notes',       type: 'text',   position: 6, config: {}, hidden: false, width: 220 },
+];
+
+const CASHFLOW_ROWS: Row[] = [
+  { id: 'cfr-1', database_id: 'db-cashflow', position: 0, created_by: 'u-1', created_at: '2026-06-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cfc-item': 'Medikal Lux retainer', 'cfc-activity': 'Operating', 'cfc-dir': 'Inflow', 'cfc-amount': 5600, 'cfc-date': '2026-06-01', 'cfc-company': 'Appercept' } },
+  { id: 'cfr-2', database_id: 'db-cashflow', position: 1, created_by: 'u-1', created_at: '2026-06-02T00:00:00Z', updated_at: '2026-06-02T00:00:00Z', cells: { 'cfc-item': '24 Sata retainer', 'cfc-activity': 'Operating', 'cfc-dir': 'Inflow', 'cfc-amount': 8400, 'cfc-date': '2026-06-02', 'cfc-company': 'Appercept' } },
+  { id: 'cfr-3', database_id: 'db-cashflow', position: 2, created_by: 'u-1', created_at: '2026-06-03T00:00:00Z', updated_at: '2026-06-03T00:00:00Z', cells: { 'cfc-item': 'Freelance dev payment', 'cfc-activity': 'Operating', 'cfc-dir': 'Outflow', 'cfc-amount': 800, 'cfc-date': '2026-06-03', 'cfc-company': 'Appercept' } },
+  { id: 'cfr-4', database_id: 'db-cashflow', position: 3, created_by: 'u-1', created_at: '2026-06-05T00:00:00Z', updated_at: '2026-06-05T00:00:00Z', cells: { 'cfc-item': 'New MacBook Pro', 'cfc-activity': 'Investing', 'cfc-dir': 'Outflow', 'cfc-amount': 2800, 'cfc-date': '2026-06-05', 'cfc-company': 'Appercept', 'cfc-notes': 'Workstation upgrade' } },
+  { id: 'cfr-5', database_id: 'db-cashflow', position: 4, created_by: 'u-1', created_at: '2026-06-10T00:00:00Z', updated_at: '2026-06-10T00:00:00Z', cells: { 'cfc-item': 'Owner draw', 'cfc-activity': 'Financing', 'cfc-dir': 'Outflow', 'cfc-amount': 3000, 'cfc-date': '2026-06-10', 'cfc-company': 'Appercept' } },
+  { id: 'cfr-6', database_id: 'db-cashflow', position: 5, created_by: 'u-1', created_at: '2026-06-12T00:00:00Z', updated_at: '2026-06-12T00:00:00Z', cells: { 'cfc-item': 'Voice Bot consulting fee', 'cfc-activity': 'Operating', 'cfc-dir': 'Inflow', 'cfc-amount': 3500, 'cfc-date': '2026-06-12', 'cfc-company': 'Appercept' } },
+];
+
+// ─── BALANCE SHEET ────────────────────────────────────────────────────────────
+const BALANCE_COLS: Column[] = [
+  { id: 'bsc-item',   database_id: 'db-balance', name: 'Item',        type: 'text',   position: 0, config: {}, hidden: false, width: 240 },
+  { id: 'bsc-cat',    database_id: 'db-balance', name: 'Category',    type: 'select', position: 1, config: { options: [{ id: 'bsc-asset', label: 'Asset', color: '#3ecf8e' }, { id: 'bsc-liab', label: 'Liability', color: '#ff5c5c' }, { id: 'bsc-eq', label: 'Equity', color: '#60a5fa' }] }, hidden: false, width: 120 },
+  { id: 'bsc-type',   database_id: 'db-balance', name: 'Type',        type: 'select', position: 2, config: { options: [{ id: 'bst-cur', label: 'Current', color: '#2dd4bf' }, { id: 'bst-non', label: 'Non-current', color: '#a78bfa' }] }, hidden: false, width: 130 },
+  { id: 'bsc-amount', database_id: 'db-balance', name: 'Amount',      type: 'number', position: 3, config: { prefix: '€' }, hidden: false, width: 120 },
+  { id: 'bsc-date',   database_id: 'db-balance', name: 'As of',       type: 'date',   position: 4, config: {}, hidden: false, width: 120 },
+  { id: 'bsc-notes',  database_id: 'db-balance', name: 'Notes',       type: 'text',   position: 5, config: {}, hidden: false, width: 220 },
+];
+
+const BALANCE_ROWS: Row[] = [
+  { id: 'bsr-1', database_id: 'db-balance', position: 0, created_by: 'u-1', created_at: '2026-06-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'bsc-item': 'Business bank account', 'bsc-cat': 'Asset', 'bsc-type': 'Current', 'bsc-amount': 42000, 'bsc-date': '2026-06-01' } },
+  { id: 'bsr-2', database_id: 'db-balance', position: 1, created_by: 'u-1', created_at: '2026-06-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'bsc-item': 'Accounts receivable', 'bsc-cat': 'Asset', 'bsc-type': 'Current', 'bsc-amount': 14000, 'bsc-date': '2026-06-01', 'bsc-notes': 'Unpaid client invoices' } },
+  { id: 'bsr-3', database_id: 'db-balance', position: 2, created_by: 'u-1', created_at: '2026-06-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'bsc-item': 'Equipment & hardware', 'bsc-cat': 'Asset', 'bsc-type': 'Non-current', 'bsc-amount': 9500, 'bsc-date': '2026-06-01' } },
+  { id: 'bsr-4', database_id: 'db-balance', position: 3, created_by: 'u-1', created_at: '2026-06-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'bsc-item': 'Accounts payable', 'bsc-cat': 'Liability', 'bsc-type': 'Current', 'bsc-amount': 4200, 'bsc-date': '2026-06-01', 'bsc-notes': 'Freelancers & suppliers' } },
+  { id: 'bsr-5', database_id: 'db-balance', position: 4, created_by: 'u-1', created_at: '2026-06-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'bsc-item': 'VAT payable', 'bsc-cat': 'Liability', 'bsc-type': 'Current', 'bsc-amount': 6800, 'bsc-date': '2026-06-01' } },
+  { id: 'bsr-6', database_id: 'db-balance', position: 5, created_by: 'u-1', created_at: '2026-06-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'bsc-item': "Owner's equity", 'bsc-cat': 'Equity', 'bsc-type': 'Non-current', 'bsc-amount': 54500, 'bsc-date': '2026-06-01', 'bsc-notes': 'Retained earnings + capital' } },
+];
+
 // ─── PASSWORDS DATABASE ───────────────────────────────────────────────────────
 const PASSWORD_COLS: Column[] = [
   { id: 'pwc-service', database_id: 'db-passwords', name: 'Service', type: 'text', position: 0, config: {}, hidden: false, width: 200 },
@@ -239,62 +279,48 @@ const CLUBCROWD_COLS: Column[] = [
   { id: 'clc-fee',         database_id: 'db-clubcrowd', name: 'Fee / reservation (€)',  type: 'number', position: 2, config: { prefix: '€' },           hidden: false, width: 160 },
   { id: 'clc-reservations',database_id: 'db-clubcrowd', name: 'Monthly reservations',   type: 'number', position: 3, config: {},                       hidden: false, width: 160 },
   { id: 'clc-avg-spend',   database_id: 'db-clubcrowd', name: 'Avg table spend (€)',    type: 'number', position: 4, config: { prefix: '€' },           hidden: false, width: 150 },
-  { id: 'clc-stripe-id',   database_id: 'db-clubcrowd', name: 'Stripe Account ID',      type: 'text',   position: 5, config: {},                       hidden: false, width: 200 },
-  { id: 'clc-stripe-st',   database_id: 'db-clubcrowd', name: 'Stripe status',          type: 'select', position: 6, config: { options: [{ id: 'ss1', label: 'Connected', color: '#3ecf8e' }, { id: 'ss2', label: 'Pending', color: '#f5a623' }, { id: 'ss3', label: 'Disconnected', color: '#ff5c5c' }] }, hidden: false, width: 130 },
-  { id: 'clc-joined',      database_id: 'db-clubcrowd', name: 'Platform joined',        type: 'date',   position: 7, config: {},                       hidden: false, width: 130 },
-  { id: 'clc-status',      database_id: 'db-clubcrowd', name: 'Status',                 type: 'select', position: 8, config: { options: [{ id: 'cs-lead', label: 'Lead', color: '#60a5fa' }, { id: 'cs-onb', label: 'Onboarding', color: '#f5a623' }, { id: 'cs-active', label: 'Active', color: '#3ecf8e' }, { id: 'cs-past', label: 'Past', color: '#6b7280' }] }, hidden: false, width: 110 },
-  { id: 'clc-notes',       database_id: 'db-clubcrowd', name: 'Notes',                  type: 'text',   position: 9, config: {},                       hidden: false, width: 240 },
+  { id: 'clc-season',      database_id: 'db-clubcrowd', name: 'Operating season',       type: 'select', position: 5, config: { options: [{ id: 'os12', label: 'Year-round', color: '#3ecf8e' }, { id: 'os9', label: '9 months', color: '#60a5fa' }, { id: 'os6', label: '6 months', color: '#f5a623' }, { id: 'os3', label: 'Summer (3mo)', color: '#f472b6' }] }, hidden: false, width: 150 },
+  { id: 'clc-stripe-id',   database_id: 'db-clubcrowd', name: 'Stripe Account ID',      type: 'text',   position: 6, config: {},                       hidden: false, width: 200 },
+  { id: 'clc-stripe-st',   database_id: 'db-clubcrowd', name: 'Stripe status',          type: 'select', position: 7, config: { options: [{ id: 'ss1', label: 'Connected', color: '#3ecf8e' }, { id: 'ss2', label: 'Pending', color: '#f5a623' }, { id: 'ss3', label: 'Disconnected', color: '#ff5c5c' }] }, hidden: false, width: 130 },
+  { id: 'clc-joined',      database_id: 'db-clubcrowd', name: 'Platform joined',        type: 'date',   position: 8, config: {},                       hidden: false, width: 130 },
+  { id: 'clc-status',      database_id: 'db-clubcrowd', name: 'Status',                 type: 'select', position: 9, config: { options: [{ id: 'cs-lead', label: 'Lead', color: '#60a5fa' }, { id: 'cs-onb', label: 'Onboarding', color: '#f5a623' }, { id: 'cs-active', label: 'Active', color: '#3ecf8e' }, { id: 'cs-past', label: 'Past', color: '#6b7280' }] }, hidden: false, width: 110 },
+  { id: 'clc-notes',       database_id: 'db-clubcrowd', name: 'Notes',                  type: 'text',   position: 10, config: {},                      hidden: false, width: 240 },
 ];
 
 const CLUBCROWD_ROWS: Row[] = [
   {
     id: 'clr-1', database_id: 'db-clubcrowd', position: 0, created_by: 'u-1',
     created_at: '2026-01-15T00:00:00Z', updated_at: '2026-06-01T00:00:00Z',
-    cells: { 'clc-venue': 'Aquarius Club', 'clc-city': 'Zagreb', 'clc-fee': 2.5, 'clc-reservations': 340, 'clc-avg-spend': 120, 'clc-stripe-id': 'acct_1QxAquarius', 'clc-stripe-st': 'Connected', 'clc-joined': '2026-01-15', 'clc-status': 'Active' },
+    cells: { 'clc-venue': 'Aquarius Club', 'clc-city': 'Zagreb', 'clc-fee': 2.5, 'clc-reservations': 340, 'clc-avg-spend': 120, 'clc-season': 'Year-round', 'clc-stripe-id': '', 'clc-stripe-st': 'Disconnected', 'clc-joined': '2026-01-15', 'clc-status': 'Active' },
   },
   {
     id: 'clr-2', database_id: 'db-clubcrowd', position: 1, created_by: 'u-1',
     created_at: '2026-02-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z',
-    cells: { 'clc-venue': 'Amadeus Club', 'clc-city': 'Zagreb', 'clc-fee': 2, 'clc-reservations': 210, 'clc-avg-spend': 90, 'clc-stripe-id': 'acct_1QxAmadeus', 'clc-stripe-st': 'Connected', 'clc-joined': '2026-02-01', 'clc-status': 'Active' },
+    cells: { 'clc-venue': 'Amadeus Club', 'clc-city': 'Zagreb', 'clc-fee': 2, 'clc-reservations': 210, 'clc-avg-spend': 90, 'clc-season': '9 months', 'clc-stripe-id': '', 'clc-stripe-st': 'Disconnected', 'clc-joined': '2026-02-01', 'clc-status': 'Active' },
   },
   {
     id: 'clr-3', database_id: 'db-clubcrowd', position: 2, created_by: 'u-1',
     created_at: '2026-03-10T00:00:00Z', updated_at: '2026-06-01T00:00:00Z',
-    cells: { 'clc-venue': 'Boogaloo', 'clc-city': 'Zagreb', 'clc-fee': 1.5, 'clc-reservations': 95, 'clc-avg-spend': 70, 'clc-stripe-id': '', 'clc-stripe-st': 'Onboarding', 'clc-joined': '2026-03-10', 'clc-status': 'Onboarding' },
+    cells: { 'clc-venue': 'Boogaloo', 'clc-city': 'Zagreb', 'clc-fee': 1.5, 'clc-reservations': 95, 'clc-avg-spend': 70, 'clc-season': 'Year-round', 'clc-stripe-id': '', 'clc-stripe-st': 'Disconnected', 'clc-joined': '2026-03-10', 'clc-status': 'Onboarding' },
   },
   {
     id: 'clr-4', database_id: 'db-clubcrowd', position: 3, created_by: 'u-1',
     created_at: '2026-04-20T00:00:00Z', updated_at: '2026-06-01T00:00:00Z',
-    cells: { 'clc-venue': 'Barbarella', 'clc-city': 'Zagreb', 'clc-fee': 3, 'clc-reservations': 180, 'clc-avg-spend': 150, 'clc-stripe-id': 'acct_1QxBarbarella', 'clc-stripe-st': 'Connected', 'clc-joined': '2026-04-20', 'clc-status': 'Active' },
+    cells: { 'clc-venue': 'Barbarella', 'clc-city': 'Zagreb', 'clc-fee': 3, 'clc-reservations': 180, 'clc-avg-spend': 150, 'clc-season': 'Summer (3mo)', 'clc-stripe-id': '', 'clc-stripe-st': 'Disconnected', 'clc-joined': '2026-04-20', 'clc-status': 'Active' },
   },
   {
     id: 'clr-5', database_id: 'db-clubcrowd', position: 4, created_by: 'u-1',
     created_at: '2026-05-28T00:00:00Z', updated_at: '2026-06-01T00:00:00Z',
-    cells: { 'clc-venue': 'Klub Katran', 'clc-city': 'Split', 'clc-fee': 2.5, 'clc-reservations': 0, 'clc-avg-spend': 0, 'clc-stripe-id': '', 'clc-stripe-st': 'Disconnected', 'clc-status': 'Lead', 'clc-notes': 'Interested after Aquarius referral — demo scheduled.' },
+    cells: { 'clc-venue': 'Klub Katran', 'clc-city': 'Split', 'clc-fee': 2.5, 'clc-reservations': 0, 'clc-avg-spend': 0, 'clc-season': 'Summer (3mo)', 'clc-stripe-id': '', 'clc-stripe-st': 'Disconnected', 'clc-status': 'Lead', 'clc-notes': 'Interested after Aquarius referral — demo scheduled.' },
   },
   {
     id: 'clr-6', database_id: 'db-clubcrowd', position: 5, created_by: 'u-1',
     created_at: '2026-01-05T00:00:00Z', updated_at: '2026-05-01T00:00:00Z',
-    cells: { 'clc-venue': 'Pepermint', 'clc-city': 'Zagreb', 'clc-fee': 2, 'clc-reservations': 0, 'clc-avg-spend': 0, 'clc-stripe-id': 'acct_1QxPepermint', 'clc-stripe-st': 'Disconnected', 'clc-joined': '2026-01-05', 'clc-status': 'Past', 'clc-notes': 'Churned in April — switched to in-house system.' },
+    cells: { 'clc-venue': 'Pepermint', 'clc-city': 'Zagreb', 'clc-fee': 2, 'clc-reservations': 0, 'clc-avg-spend': 0, 'clc-season': 'Year-round', 'clc-stripe-id': '', 'clc-stripe-st': 'Disconnected', 'clc-joined': '2026-01-05', 'clc-status': 'Past', 'clc-notes': 'Churned in April — switched to in-house system.' },
   },
 ];
 
 // ─── TEAM DATABASE ────────────────────────────────────────────────────────────
-const TEAM_COLS: Column[] = [
-  { id: 'tmc-name', database_id: 'db-team', name: 'Name', type: 'text', position: 0, config: {}, hidden: false, width: 200 },
-  { id: 'tmc-role', database_id: 'db-team', name: 'Role', type: 'text', position: 1, config: {}, hidden: false, width: 160 },
-  { id: 'tmc-email', database_id: 'db-team', name: 'Email', type: 'email', position: 2, config: {}, hidden: false, width: 200 },
-  { id: 'tmc-rate', database_id: 'db-team', name: 'Hourly rate', type: 'number', position: 3, config: { prefix: '€', suffix: '/h' }, hidden: false, width: 120 },
-  { id: 'tmc-notes', database_id: 'db-team', name: 'Notes', type: 'text', position: 4, config: {}, hidden: false, width: 240 },
-];
-
-const TEAM_ROWS: Row[] = [
-  { id: 'tmr-1', database_id: 'db-team', position: 0, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'tmc-name': 'Gašpar Bodulica', 'tmc-role': 'Founder & CEO', 'tmc-email': 'gaspar@appercept.net' } },
-  { id: 'tmr-2', database_id: 'db-team', position: 1, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'tmc-name': 'Karlo Casni', 'tmc-role': 'Operations', 'tmc-email': 'kcasni@appercept.net' } },
-  { id: 'tmr-3', database_id: 'db-team', position: 2, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'tmc-name': 'Design Lead', 'tmc-role': 'UI/UX', 'tmc-email': 'design@appercept.net' } },
-  { id: 'tmr-4', database_id: 'db-team', position: 3, created_by: 'u-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'tmc-name': 'Dev Freelancer', 'tmc-role': 'Development', 'tmc-email': 'dev@appercept.net' } },
-];
-
 // ─── FILES DATABASE ───────────────────────────────────────────────────────────
 const FILE_COLS: Column[] = [
   { id: 'fc-name', database_id: 'db-files', name: 'File name', type: 'text', position: 0, config: {}, hidden: false, width: 260 },
@@ -348,9 +374,10 @@ export const DATABASES: Record<string, Database> = {
   'db-meetings': { id: 'db-meetings', page_id: 'p-meetings', name: 'Meetings', columns: MEETING_COLS, rows: MEETING_ROWS, views: [{ id: 'mv-cal', database_id: 'db-meetings', name: 'Calendar', type: 'calendar', icon: '📅', filters: [], sorts: [], hidden_cols: [], is_default: true }, { id: 'mv-all', database_id: 'db-meetings', name: 'All Meetings', type: 'table', icon: '☰', filters: [], sorts: [], hidden_cols: [] }], default_view: 'calendar' },
   'db-companies': { id: 'db-companies', page_id: 'p-companies', name: 'Companies', columns: COMPANY_COLS, rows: COMPANY_ROWS, views: [{ id: 'comv-all', database_id: 'db-companies', name: 'All Companies', type: 'table', icon: 'IconBuildingFactory2', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
   'db-costs': { id: 'db-costs', page_id: 'p-costs', name: 'Costs', columns: COST_COLS, rows: COST_ROWS, views: [{ id: 'cosv-all', database_id: 'db-costs', name: 'All Costs', type: 'table', icon: '💰', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
+  'db-cashflow': { id: 'db-cashflow', page_id: 'p-cashflow', name: 'Cash Flow Statement', columns: CASHFLOW_COLS, rows: CASHFLOW_ROWS, views: [{ id: 'cfv-all', database_id: 'db-cashflow', name: 'All Flows', type: 'table', icon: 'IconArrowsExchange', filters: [], sorts: [{ column_id: 'cfc-date', direction: 'desc' }], hidden_cols: [], is_default: true }], default_view: 'table' },
+  'db-balance': { id: 'db-balance', page_id: 'p-balance', name: 'Balance Sheet', columns: BALANCE_COLS, rows: BALANCE_ROWS, views: [{ id: 'bsv-all', database_id: 'db-balance', name: 'All Items', type: 'table', icon: 'IconScale', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
   'db-passwords': { id: 'db-passwords', page_id: 'p-passwords', name: 'Passwords', columns: PASSWORD_COLS, rows: PASSWORD_ROWS, views: [{ id: 'pwv-all', database_id: 'db-passwords', name: 'All', type: 'table', icon: '🔐', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
   'db-clubcrowd': { id: 'db-clubcrowd', page_id: 'p-clubcrowd', name: 'ClubCrowd Clients', columns: CLUBCROWD_COLS, rows: CLUBCROWD_ROWS, views: [{ id: 'clv-all', database_id: 'db-clubcrowd', name: 'All Venues', type: 'table', icon: '🎵', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
-  'db-team': { id: 'db-team', page_id: 'p-team', name: 'Team & Roles', columns: TEAM_COLS, rows: TEAM_ROWS, views: [{ id: 'tmv-all', database_id: 'db-team', name: 'All Members', type: 'table', icon: '👤', filters: [], sorts: [], hidden_cols: [], is_default: true }], default_view: 'table' },
   'db-files': { id: 'db-files', page_id: 'p-files', name: 'Files', columns: FILE_COLS, rows: FILE_ROWS, views: [
     { id: 'fv-all', database_id: 'db-files', name: 'All Files', type: 'table', icon: 'IconFiles', filters: [], sorts: [{ column_id: 'fc-date', direction: 'desc' }], hidden_cols: [], is_default: true },
     { id: 'fv-pdf', database_id: 'db-files', name: 'PDFs', type: 'table', icon: 'IconFileTypePdf', filters: [{ id: 'f-pdf', column_id: 'fc-type', operator: 'equals', value: 'PDF' }], sorts: [], hidden_cols: [] },
@@ -384,9 +411,10 @@ export const PAGE_DB_MAP: Record<string, string> = {
   'p-meetings': 'db-meetings',
   'p-companies': 'db-companies',
   'p-costs': 'db-costs',
+  'p-cashflow': 'db-cashflow',
+  'p-balance': 'db-balance',
   'p-passwords': 'db-passwords',
   'p-clubcrowd': 'db-clubcrowd',
-  'p-team': 'db-team',
   'p-consulting': 'db-consulting',
 };
 
@@ -459,8 +487,8 @@ export const ACTIVITIES: Activity[] = [
 import type { TeamRole, ProjectShare } from './types';
 
 export const TEAM_ROLES: TeamRole[] = [
-  { id: 'tr-1', name: 'Gašpar Bodulica', user_id: 'u-1', role_title: 'Lead / Strategy', default_share: 45, is_external: false, color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
-  { id: 'tr-2', name: 'Karlo Casni',     user_id: 'u-2', role_title: 'Development',     default_share: 25, is_external: false, color: '#2ee89a', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'tr-1', name: 'Gašpar Bodulica', user_id: 'u-1', role_title: 'Lead / Strategy', email: 'gaspar@appercept.net', default_share: 45, is_external: false, color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'tr-2', name: 'Karlo Casni',     user_id: 'u-2', role_title: 'Development',     email: 'kcasni@appercept.net', default_share: 25, is_external: false, color: '#2ee89a', created_at: '2026-01-01T00:00:00Z' },
 ];
 // Company retention = 100 − sum of all role shares (auto-calculated in UI)
 // Default: 45 + 25 = 70% team, 30% stays in Appercept

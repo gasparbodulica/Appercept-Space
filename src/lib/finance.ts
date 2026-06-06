@@ -10,11 +10,42 @@ export interface CompanyFinance {
   monthLabel: string;     // 'June'
   revenue: number;        // client retainer revenue
   consultingRevenue: number; // one-off consulting fees this month
-  totalRevenue: number;   // revenue + consultingRevenue
+  clubRevenue: number;    // ClubCrowd reservation fees (season-adjusted monthly avg)
+  totalRevenue: number;   // revenue + consultingRevenue + clubRevenue
   expenses: number;       // effective cost of all rows this month (recurring + yearly + one-time)
   profit: number;         // totalRevenue - expenses
   byCategory: CategorySlice[];
   expenseCount: number;   // number of cost rows contributing this month
+}
+
+/**
+ * ClubCrowd monthly revenue from reservation fees, season-adjusted.
+ * Each club's yearly revenue = fee × monthly reservations × active months;
+ * we divide the total by 12 to get a fair recurring monthly contribution.
+ */
+export function computeClubRevenue(clubcrowdDb: Database | undefined): { monthlyAvg: number; yearly: number; venueCount: number } {
+  if (!clubcrowdDb) return { monthlyAvg: 0, yearly: 0, venueCount: 0 };
+  const feeCol    = clubcrowdDb.columns.find(c => c.name === 'Fee / reservation (€)');
+  const resCol    = clubcrowdDb.columns.find(c => c.name === 'Monthly reservations');
+  const seasonCol = clubcrowdDb.columns.find(c => c.name === 'Operating season');
+  if (!feeCol || !resCol) return { monthlyAvg: 0, yearly: 0, venueCount: 0 };
+  const months = (label: string): number => {
+    if (!label) return 12;
+    if (/year|12/i.test(label)) return 12;
+    const m = label.match(/(\d+)/);
+    return m ? Number(m[1]) : 12;
+  };
+  let yearly = 0;
+  let venueCount = 0;
+  for (const row of clubcrowdDb.rows) {
+    const fee = Number(row.cells[feeCol.id]) || 0;
+    const res = Number(row.cells[resCol.id]) || 0;
+    const monthly = fee * res;
+    if (monthly > 0) venueCount += 1;
+    const mo = seasonCol ? months(String(row.cells[seasonCol.id] ?? '')) : 12;
+    yearly += monthly * mo;
+  }
+  return { monthlyAvg: Math.round(yearly / 12), yearly: Math.round(yearly), venueCount };
 }
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -200,6 +231,7 @@ export function computeCompanyFinance(
   companyName: string,
   monthlyRevenue: number,
   consultingRevenue = 0,
+  clubRevenue = 0,
 ): CompanyFinance {
   const now = new Date();
   const currentYM = nowYM();
@@ -232,11 +264,12 @@ export function computeCompanyFinance(
     .sort((a, b) => b.amount - a.amount);
 
   const roundedExpenses = Math.round(expenses);
-  const totalRevenue = monthlyRevenue + consultingRevenue;
+  const totalRevenue = monthlyRevenue + consultingRevenue + clubRevenue;
   return {
     monthLabel: MONTHS[now.getMonth()],
     revenue: monthlyRevenue,
     consultingRevenue,
+    clubRevenue,
     totalRevenue,
     expenses: roundedExpenses,
     profit: totalRevenue - roundedExpenses,

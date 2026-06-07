@@ -7,7 +7,7 @@ import { Topbar } from '@/components/layout/Topbar';
 import { WeatherWidget } from '@/components/WeatherWidget';
 import { computeCompanyFinance, computeClientRevenue, computeConsultingRevenue, computeClubRevenue, type CompanyFinance } from '@/lib/finance';
 import { TeamCapacityHeatmap } from '@/components/TeamCapacityHeatmap';
-import { IconCircleCheck, IconCircleFilled, IconCalendar, IconFileText, IconCurrencyEuro, IconSun, IconSunset, IconMoon, IconTrendingUp, IconTrendingDown, IconBuildingFactory2, IconAlertTriangle, IconMusic, IconChevronRight, IconBrandStripe } from '@tabler/icons-react';
+import { IconCircleCheck, IconCircleFilled, IconCalendar, IconFileText, IconCurrencyEuro, IconSun, IconSunset, IconMoon, IconTrendingUp, IconTrendingDown, IconBuildingFactory2, IconAlertTriangle, IconMusic, IconChevronRight, IconBrandStripe, IconWallet, IconScale, IconArrowsExchange, IconClockHour4 } from '@tabler/icons-react';
 import { getStatusConfig, getPriorityConfig, formatDate, formatDateTime, isOverdue } from '@/lib/utils';
 
 const GreetingIcon = () => {
@@ -57,6 +57,14 @@ export default function DashboardPage() {
     const page = pages.find((p) => p.id === db.page_id);
     return page?.slug === 'clubcrowd';
   });
+  const balanceDb = Object.values(databases).find((db) => {
+    const page = pages.find((p) => p.id === db.page_id);
+    return page?.slug === 'balance-sheet';
+  });
+  const cashflowDb = Object.values(databases).find((db) => {
+    const page = pages.find((p) => p.id === db.page_id);
+    return page?.slug === 'cashflow';
+  });
 
   // ── Appercept finances: retainers + consulting + club fees − expenses = profit ──
   const { revenue: clientRevenue, activeCount: clientCount } = computeClientRevenue(clientsDb);
@@ -91,6 +99,56 @@ export default function DashboardPage() {
     if (stage in clubStages) clubStages[stage]++;
     if (ccStripeCol && String(r.cells[ccStripeCol.id] ?? '') === 'Connected') clubConnected++;
   }
+
+  // ── Financial Overview: synthesise Balance Sheet + Cash Flow ──
+  const bsItemCol   = balanceDb?.columns.find((c) => c.position === 0);
+  const bsCatCol    = balanceDb?.columns.find((c) => c.name === 'Category');
+  const bsAmountCol = balanceDb?.columns.find((c) => c.name === 'Amount');
+  let totalAssets = 0, totalLiabilities = 0, cashOnHand = 0, accountsReceivable = 0;
+  for (const r of balanceDb?.rows ?? []) {
+    const cat = bsCatCol ? String(r.cells[bsCatCol.id] ?? '') : '';
+    const amt = bsAmountCol ? Number(r.cells[bsAmountCol.id]) || 0 : 0;
+    const name = (bsItemCol ? String(r.cells[bsItemCol.id] ?? '') : '').toLowerCase();
+    if (cat === 'Asset') {
+      totalAssets += amt;
+      if (/bank|cash/.test(name)) cashOnHand += amt;
+      if (/receivable/.test(name)) accountsReceivable += amt;
+    } else if (cat === 'Liability') {
+      totalLiabilities += amt;
+    }
+  }
+  const netWorth = totalAssets - totalLiabilities;
+
+  // ── Cash flow this month — CONNECTED to real revenue & costs ──
+  // Operating cash flow is DERIVED from your actual revenue (retainers + consulting
+  // + clubs) and actual costs (Costs DB), so it always matches the P&L. The manual
+  // Cash Flow statement only adds non-operating movements (Investing / Financing,
+  // e.g. equipment purchases, owner draws, loans).
+  const cfDirCol      = cashflowDb?.columns.find((c) => c.name === 'Direction');
+  const cfAmountCol   = cashflowDb?.columns.find((c) => c.name === 'Amount');
+  const cfDateCol     = cashflowDb?.columns.find((c) => c.type === 'date');
+  const cfActivityCol = cashflowDb?.columns.find((c) => c.name === 'Activity');
+  const curYM = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+
+  const operatingIn = finance.totalRevenue;   // real revenue this month
+  const operatingOut = finance.expenses;      // real costs this month
+  let investFinIn = 0, investFinOut = 0;
+  for (const r of cashflowDb?.rows ?? []) {
+    const d = cfDateCol ? String(r.cells[cfDateCol.id] ?? '').slice(0, 7) : '';
+    if (d && d !== curYM) continue;
+    const activity = cfActivityCol ? String(r.cells[cfActivityCol.id] ?? '') : '';
+    if (activity === 'Operating' || activity === '') continue; // operating already covered by revenue/costs
+    const dir = cfDirCol ? String(r.cells[cfDirCol.id] ?? '') : '';
+    const amt = cfAmountCol ? Number(r.cells[cfAmountCol.id]) || 0 : 0;
+    if (dir === 'Inflow') investFinIn += amt;
+    else if (dir === 'Outflow') investFinOut += amt;
+  }
+  const cashIn = operatingIn + investFinIn;
+  const cashOut = operatingOut + investFinOut;
+  const netCashFlow = cashIn - cashOut;
+  // Runway = months of cash left at the current burn (only meaningful when burning)
+  const runwayMonths = cashOut > cashIn && cashOnHand > 0 ? cashOnHand / (cashOut - cashIn) : Infinity;
+  const hasFinancials = (balanceDb?.rows.length ?? 0) > 0 || (cashflowDb?.rows.length ?? 0) > 0 || finance.totalRevenue > 0 || finance.expenses > 0;
 
   const todoRows = todoDb?.rows ?? [];
   const clientRows = clientsDb?.rows ?? [];
@@ -188,6 +246,32 @@ export default function DashboardPage() {
 
         {/* Appercept finances — revenue minus costs = monthly profit */}
         <ApperceptFinanceBox f={finance} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} />
+
+        {/* Financial Overview — synthesised from Balance Sheet + Cash Flow + real costs/revenue */}
+        {hasFinancials && (
+          <FinancialOverview
+            cashOnHand={cashOnHand}
+            netWorth={netWorth}
+            totalAssets={totalAssets}
+            totalLiabilities={totalLiabilities}
+            accountsReceivable={accountsReceivable}
+            cashIn={cashIn}
+            cashOut={cashOut}
+            netCashFlow={netCashFlow}
+            runwayMonths={runwayMonths}
+            revenueStreams={[
+              { label: 'Retainers', amount: finance.revenue, color: 'var(--color-teal)' },
+              { label: 'Consulting', amount: finance.consultingRevenue, color: '#a78bfa' },
+              { label: 'Clubs', amount: finance.clubRevenue, color: '#635bff' },
+            ].filter((s) => s.amount > 0)}
+            totalRevenue={finance.totalRevenue}
+            costsByCategory={finance.byCategory}
+            totalCosts={finance.expenses}
+            onOpenBalance={() => router.push('/pages/balance-sheet')}
+            onOpenCashflow={() => router.push('/pages/cashflow')}
+            onOpenCosts={() => router.push('/pages/costs')}
+          />
+        )}
 
         {/* ClubCrowd snapshot */}
         {clubRows.length > 0 && (
@@ -341,6 +425,122 @@ function fmt(n: number) {
 const STAGE_COLORS: Record<string, string> = {
   Lead: '#60a5fa', Onboarding: '#f5a623', Active: '#3ecf8e', Past: '#6b7280',
 };
+
+function FinancialOverview({ cashOnHand, netWorth, totalAssets, totalLiabilities, accountsReceivable, cashIn, cashOut, netCashFlow, runwayMonths, revenueStreams, totalRevenue, costsByCategory, totalCosts, onOpenBalance, onOpenCashflow, onOpenCosts }: {
+  cashOnHand: number; netWorth: number; totalAssets: number; totalLiabilities: number;
+  accountsReceivable: number; cashIn: number; cashOut: number; netCashFlow: number; runwayMonths: number;
+  revenueStreams: { label: string; amount: number; color: string }[]; totalRevenue: number;
+  costsByCategory: { label: string; amount: number; color: string }[]; totalCosts: number;
+  onOpenBalance: () => void; onOpenCashflow: () => void; onOpenCosts: () => void;
+}) {
+  const runwayText = !isFinite(runwayMonths)
+    ? 'Healthy'
+    : runwayMonths >= 24 ? '24+ mo' : `${runwayMonths.toFixed(1)} mo`;
+  const runwayColor = !isFinite(runwayMonths) ? 'var(--color-green)' : runwayMonths >= 6 ? 'var(--color-green)' : runwayMonths >= 3 ? 'var(--color-amber)' : 'var(--color-red)';
+  const netCashColor = netCashFlow >= 0 ? 'var(--color-green)' : 'var(--color-red)';
+  const netWorthColor = netWorth >= 0 ? 'var(--color-teal)' : 'var(--color-red)';
+
+  const cards = [
+    { label: 'Cash on hand', value: fmt(cashOnHand), color: 'var(--color-teal)', icon: <IconWallet size={15} />, sub: 'in the bank', onClick: onOpenBalance },
+    { label: 'Net cash flow', value: `${netCashFlow >= 0 ? '+' : ''}${fmt(netCashFlow)}`, color: netCashColor, icon: <IconArrowsExchange size={15} />, sub: `${fmt(cashIn)} in · ${fmt(cashOut)} out`, onClick: onOpenCashflow },
+    { label: 'Cash runway', value: runwayText, color: runwayColor, icon: <IconClockHour4 size={15} />, sub: isFinite(runwayMonths) ? 'at current burn' : 'inflow ≥ outflow', onClick: onOpenCashflow },
+    { label: 'Net worth', value: fmt(netWorth), color: netWorthColor, icon: <IconScale size={15} />, sub: `${fmt(totalAssets)} − ${fmt(totalLiabilities)}`, onClick: onOpenBalance },
+    { label: 'Owed to you', value: fmt(accountsReceivable), color: accountsReceivable > 0 ? 'var(--color-amber)' : 'var(--color-gray)', icon: <IconCurrencyEuro size={15} />, sub: 'receivables', onClick: onOpenBalance },
+  ];
+
+  return (
+    <div style={{
+      background: 'var(--color-bg-elevated)',
+      border: '0.5px solid var(--color-border-default)',
+      borderRadius: 'var(--card-radius)',
+      padding: '20px 24px', marginBottom: 40,
+      boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg, #2dd4bf, #60a5fa)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+          <IconScale size={17} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Financial overview</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Live from your Balance Sheet &amp; Cash Flow statements</div>
+        </div>
+        <button onClick={onOpenBalance} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '6px 12px', borderRadius: 7, border: '0.5px solid var(--color-border-strong)', background: 'var(--color-bg-active)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer' }}>
+          Balance sheet →
+        </button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+        {cards.map((c) => (
+          <div key={c.label} onClick={c.onClick}
+            style={{ background: 'var(--color-bg-surface)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 100ms' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = c.color; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border-subtle)'; }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, color: c.color }}>
+              {c.icon}
+              <span style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>{c.label}</span>
+            </div>
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: c.color, lineHeight: 1 }}>{c.value}</div>
+            <div style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 4 }}>{c.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Where money comes from & goes — straight from your revenue + Costs database */}
+      {(revenueStreams.length > 0 || costsByCategory.length > 0) && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 20, paddingTop: 18, borderTop: '0.5px solid var(--color-border-subtle)' }}>
+          {/* Revenue streams */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Revenue in · by stream</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--color-teal)' }}>{fmt(totalRevenue)}/mo</span>
+            </div>
+            {revenueStreams.length === 0 ? (
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>No revenue recorded.</div>
+            ) : revenueStreams.map((s) => {
+              const pct = totalRevenue > 0 ? (s.amount / totalRevenue) * 100 : 0;
+              return (
+                <div key={s.label} style={{ marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', marginBottom: 3 }}>
+                    <span style={{ color: 'var(--color-text-secondary)' }}>{s.label}</span>
+                    <span style={{ color: s.color, fontWeight: 700 }}>{fmt(s.amount)}</span>
+                  </div>
+                  <div style={{ height: 5, background: 'var(--color-bg-active)', borderRadius: 9999, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: s.color, borderRadius: 9999, transition: 'width 400ms' }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Costs by type — from the P&L / Costs database */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Costs out · by type</span>
+              <button onClick={onOpenCosts} style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--color-red)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>{fmt(totalCosts)}/mo →</button>
+            </div>
+            {costsByCategory.length === 0 ? (
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>No costs this month.</div>
+            ) : costsByCategory.map((c) => {
+              const pct = totalCosts > 0 ? (c.amount / totalCosts) * 100 : 0;
+              return (
+                <div key={c.label} style={{ marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', marginBottom: 3 }}>
+                    <span style={{ color: 'var(--color-text-secondary)' }}>{c.label}</span>
+                    <span style={{ color: c.color, fontWeight: 700 }}>{fmt(c.amount)}</span>
+                  </div>
+                  <div style={{ height: 5, background: 'var(--color-bg-active)', borderRadius: 9999, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: c.color, borderRadius: 9999, transition: 'width 400ms' }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ClubCrowdSnapshot({ yearly, monthly, stages, connected, total, onOpen }: {
   yearly: number; monthly: number; stages: Record<string, number>; connected: number; total: number; onOpen: () => void;

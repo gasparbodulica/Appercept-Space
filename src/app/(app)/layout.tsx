@@ -11,11 +11,13 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { ClientPortalView } from '@/components/ClientPortalView';
 import { AIAssistant } from '@/components/AIAssistant';
 import { ClientPortalSync } from '@/components/ClientPortalSync';
+import { SupabaseAuthSync } from '@/components/SupabaseAuthSync';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { toggleSidebar, setCommandPaletteOpen, openRowId } = useAppStore();
   const account = useCurrentAccount();
   const justSignedIn = useAppStore((s) => s.justSignedIn);
+  const authChecked = useAppStore((s) => s.authChecked);
 
   // Wait for the persisted store to rehydrate so we don't flash the login
   // screen for an already-signed-in device.
@@ -42,12 +44,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', handler);
   }, [toggleSidebar, setCommandPaletteOpen]);
 
-  // Before hydration, render nothing to avoid an auth-screen flash
-  if (!hydrated) return null;
+  // Before hydration (or while the real session resolves), render only the
+  // auth-sync bridge so we never flash the login screen for a logged-in user.
+  if (!hydrated || !authChecked) return <SupabaseAuthSync />;
 
   // Access gate: must be signed in AND approved by an admin
   if (!account || !account.approved) {
-    return <AuthScreen />;
+    return (
+      <>
+        <SupabaseAuthSync />
+        <AuthScreen />
+      </>
+    );
   }
 
   // 3-second welcome screen right after signing in
@@ -87,6 +95,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <NewPageModal />
       <AIAssistant />
       <ClientPortalSync />
+      <SupabaseAuthSync />
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Database, Row, Column, CellValue, Comment, Activity, Notification, Page, ViewConfig, Filter, Sort, User, Workspace, Account, Channel, ChatMessage, PortalMessage, AbsenceEntry, TeamRole, ProjectShare } from './types';
 import { DATABASES, PAGES, USERS, WORKSPACE, COMMENTS, ACTIVITIES, NOTIFICATIONS, ACCOUNTS, CHANNELS, CHAT_MESSAGES, PORTAL_MESSAGES, TEAM_ROLES, PROJECT_SHARES } from './seed';
+import { isSupabaseConfigured } from './supabase';
+import { signOutSupabase } from './auth';
 
 interface AppState {
   // Core data
@@ -17,6 +19,7 @@ interface AppState {
   accounts: Account[];
   sessionAccountId: string | null;
   justSignedIn: boolean; // transient — triggers the welcome screen, not persisted
+  authChecked: boolean;  // transient — true once the real (Supabase) session has been resolved
 
   // Messaging
   channels: Channel[];
@@ -97,6 +100,9 @@ interface AppState {
   signIn: (email: string, password: string) => { ok: boolean; error?: string };
   signOut: () => void;
   clearJustSignedIn: () => void;
+  // Real (Supabase) auth bridge — set the signed-in user from the live session
+  setAuthedAccount: (account: Account | null, justSignedIn?: boolean) => void;
+  setAuthChecked: (v: boolean) => void;
   changePassword: (currentPassword: string, newPassword: string) => { ok: boolean; error?: string };
   resetPassword: (email: string, newPassword: string) => { ok: boolean; error?: string };
   // Email-code reset flow
@@ -165,6 +171,8 @@ export const useAppStore = create<AppState>()(
       accounts: ACCOUNTS,
       sessionAccountId: null,
       justSignedIn: false,
+      // With real auth, wait for the live session before deciding; local prototype is ready immediately.
+      authChecked: !isSupabaseConfigured,
       channels: CHANNELS,
       chatMessages: CHAT_MESSAGES,
       portalMessages: PORTAL_MESSAGES,
@@ -512,7 +520,15 @@ export const useAppStore = create<AppState>()(
         return { ok: true };
       },
 
-      signOut: () => set({ sessionAccountId: null, justSignedIn: false }),
+      signOut: () => { if (isSupabaseConfigured) void signOutSupabase(); set({ sessionAccountId: null, justSignedIn: false }); },
+
+      // Real (Supabase) auth bridge
+      setAuthedAccount: (account, justSignedIn = false) => set((s) => {
+        if (!account) return { sessionAccountId: null, justSignedIn: false };
+        const others = s.accounts.filter((a) => a.id !== account.id);
+        return { accounts: [account, ...others], sessionAccountId: account.id, justSignedIn };
+      }),
+      setAuthChecked: (v) => set({ authChecked: v }),
       clearJustSignedIn: () => set({ justSignedIn: false }),
 
       changePassword: (currentPassword, newPassword) => {

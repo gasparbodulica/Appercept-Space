@@ -7,13 +7,13 @@ import { DatabasePage } from '@/components/database/DatabasePage';
 import { Topbar } from '@/components/layout/Topbar';
 import { PageIcon } from '@/lib/icons';
 import { PageEditPopover } from '@/components/PageEditPopover';
-import { formatDate } from '@/lib/utils';
+import { formatDate, getStatusConfig, getPriorityConfig, isOverdue } from '@/lib/utils';
 import {
   IconTablePlus, IconLock, IconSearch, IconFileTypePdf, IconPresentation,
   IconFileText, IconTable, IconPhoto, IconVideo, IconFileZip, IconFile,
   IconPlus, IconExternalLink, IconMapPin, IconMusic, IconBrandStripe,
   IconCoinEuro, IconArmchair, IconReceipt, IconBolt, IconCircleCheck,
-  IconCalendar,
+  IconCalendar, IconChevronLeft, IconChevronRight, IconAlarm, IconTrash,
 } from '@tabler/icons-react';
 
 interface PageProps {
@@ -503,6 +503,320 @@ function ClubCrowdDashboard({ pageId, pageTitle, pageIcon, pageIconColor }: { pa
   );
 }
 
+// ── To-Do Timetable — a weekly planner view of tasks by due date ──────────────
+
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function mondayOf(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sun
+  d.setDate(d.getDate() - ((day === 0 ? 7 : day) - 1));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function TodoTimetable({ pageId, pageTitle, pageIcon, pageIconColor }: { pageId: string; pageTitle: string; pageIcon: string; pageIconColor?: string }) {
+  const { databases, users, addRow, updateCell, openRow, deleteRow } = useAppStore();
+  const isAdmin = useCurrentAccount()?.role === 'admin';
+  const db = Object.values(databases).find(d => d.page_id === pageId);
+  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  const [editAnchor, setEditAnchor] = useState<DOMRect | null>(null);
+  const [view, setView] = useState<'week' | 'all'>('week');
+  const { updatePage } = useAppStore();
+  const iconColor = pageIconColor ?? '#1c75bc';
+
+  const nameCol     = db?.columns.find(c => c.position === 0);
+  const statusCol   = db?.columns.find(c => c.type === 'status');
+  const assigneeCol = db?.columns.find(c => c.type === 'person');
+  const dueCol      = db?.columns.find(c => c.type === 'date' || c.type === 'date_range');
+  const priorityCol = db?.columns.find(c => c.type === 'priority');
+
+  const todayStr = ymd(new Date());
+  const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart); d.setDate(weekStart.getDate() + i); return d; }), [weekStart]);
+  const weekKeys = weekDates.map(ymd);
+
+  type Task = { id: string; name: string; status: string; assignee: string; priority: string; due: string };
+  const tasks = useMemo<Task[]>(() => (db?.rows ?? []).map(r => ({
+    id: r.id,
+    name:     nameCol ? String(r.cells[nameCol.id] ?? 'Untitled') : 'Untitled',
+    status:   statusCol ? String(r.cells[statusCol.id] ?? '') : '',
+    assignee: assigneeCol ? String(r.cells[assigneeCol.id] ?? '') : '',
+    priority: priorityCol ? String(r.cells[priorityCol.id] ?? '') : '',
+    due:      dueCol ? String(r.cells[dueCol.id] ?? '').split('|')[0].split('T')[0] : '',
+  })), [db, nameCol, statusCol, assigneeCol, priorityCol, dueCol]);
+
+  const isDone = (s: string) => s === 'Done' || s === 'Completed';
+  const byDay = (key: string) => tasks.filter(t => t.due === key);
+  // Due strip — unfinished tasks due today or within the next 7 days (no overdue)
+  const daysFromToday = (due: string) => Math.round((new Date(due).getTime() - new Date(todayStr).getTime()) / 86400000);
+  const dueSoon = tasks
+    .filter(t => t.due && !isDone(t.status) && daysFromToday(t.due) >= 0 && daysFromToday(t.due) <= 7)
+    .sort((a, b) => a.due.localeCompare(b.due));
+
+  const addOnDay = (key: string) => {
+    if (!db) return;
+    const row = addRow(db.id);
+    if (dueCol) updateCell(db.id, row.id, dueCol.id, key);
+    openRow(row.id, db.id);
+  };
+
+  const shiftWeek = (n: number) => { const d = new Date(weekStart); d.setDate(weekStart.getDate() + n * 7); setWeekStart(d); };
+
+  const weekLabel = `${weekDates[0].toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${weekDates[6].toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+
+  const TaskCard = ({ t }: { t: Task }) => {
+    const scfg = t.status ? getStatusConfig(t.status) : null;
+    const pcfg = t.priority ? getPriorityConfig(t.priority) : null;
+    const u = users.find(x => x.id === t.assignee);
+    const done = isDone(t.status);
+    return (
+      <div onClick={() => db && openRow(t.id, db.id)}
+        style={{
+          position: 'relative',
+          background: 'var(--color-bg-elevated)', border: '0.5px solid var(--color-border-default)',
+          borderLeft: `2.5px solid ${scfg?.color ?? 'var(--color-border-strong)'}`,
+          borderRadius: 7, padding: '7px 9px', cursor: 'pointer', marginBottom: 6,
+          opacity: done ? 0.6 : 1, transition: 'border-color 100ms, transform 100ms',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.borderColor = scfg?.color ?? 'var(--color-accent)'; const del = e.currentTarget.querySelector('.task-del') as HTMLElement | null; if (del) del.style.opacity = '1'; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.borderLeftColor = scfg?.color ?? 'var(--color-border-strong)'; const del = e.currentTarget.querySelector('.task-del') as HTMLElement | null; if (del) del.style.opacity = '0'; }}
+      >
+        {/* Delete button — appears on hover */}
+        <button
+          className="task-del"
+          onClick={(e) => { e.stopPropagation(); if (db) deleteRow(db.id, t.id); }}
+          title="Delete task"
+          style={{ position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 4, border: 'none', background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 80ms, color 80ms', zIndex: 2 }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'rgba(255,79,106,0.15)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'var(--color-bg-active)'; }}
+        >
+          <IconTrash size={11} />
+        </button>
+        <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.3, textDecoration: done ? 'line-through' : 'none', marginBottom: 5, paddingRight: 16 }}>{t.name}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+          {scfg && <span style={{ width: 7, height: 7, borderRadius: '50%', background: scfg.color, flexShrink: 0 }} title={t.status} />}
+          {pcfg && <span style={{ fontSize: 9, fontWeight: 700, color: pcfg.color }}>{t.priority}</span>}
+          <div style={{ flex: 1 }} />
+          {u && (u.avatar_url
+            ? <img src={u.avatar_url} alt={u.initials} style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }} />
+            : <span style={{ width: 16, height: 16, borderRadius: '50%', background: u.color, color: '#fff', fontSize: 7, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} title={u.name}>{u.initials}</span>)}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <Topbar breadcrumb={[pageTitle]} />
+
+      {/* Header: title + week nav */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 24px', borderBottom: '0.5px solid var(--color-border-subtle)', background: 'var(--color-bg-surface)', flexShrink: 0, position: 'relative' }}>
+        <button
+          onClick={(e) => { if (!isAdmin) return; setEditAnchor(editAnchor ? null : (e.currentTarget as HTMLElement).getBoundingClientRect()); }}
+          title={isAdmin ? 'Edit icon, colour & name' : undefined}
+          style={{ width: 34, height: 34, borderRadius: 9, background: `${iconColor}22`, color: iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: isAdmin ? 'pointer' : 'default', flexShrink: 0 }}
+        >
+          <PageIcon name={pageIcon} size={18} />
+        </button>
+        {isAdmin && editAnchor && (
+          <PageEditPopover name={pageTitle} icon={pageIcon} iconColor={iconColor} anchorRect={editAnchor}
+            onChangeName={(t) => updatePage(pageId, { title: t })}
+            onChangeIcon={(i) => updatePage(pageId, { icon: i })}
+            onChangeColor={(c) => updatePage(pageId, { iconColor: c })}
+            onClose={() => setEditAnchor(null)} />
+        )}
+        <h1 style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>{pageTitle}</h1>
+
+        {/* View toggle */}
+        <div style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--color-bg-active)', borderRadius: 8, marginLeft: 12 }}>
+          {(['week', 'all'] as const).map((v) => (
+            <button key={v} onClick={() => setView(v)} style={{
+              padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
+              fontSize: 'var(--text-xs)', fontWeight: 600,
+              background: view === v ? 'var(--color-bg-elevated)' : 'transparent',
+              color: view === v ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+              boxShadow: view === v ? '0 1px 4px rgba(0,0,0,0.25)' : 'none',
+            }}>{v === 'week' ? 'Week' : 'All tasks'}</button>
+          ))}
+        </div>
+
+        <div style={{ flex: 1 }} />
+        {view === 'week' && (
+          <>
+            <button onClick={() => shiftWeek(-1)} style={navBtnStyle}><IconChevronLeft size={16} /></button>
+            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-secondary)', minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
+            <button onClick={() => shiftWeek(1)} style={navBtnStyle}><IconChevronRight size={16} /></button>
+            <button onClick={() => setWeekStart(mondayOf(new Date()))} style={{ ...navBtnStyle, width: 'auto', padding: '0 12px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-accent)', border: '0.5px solid var(--color-accent)' }}>This week</button>
+          </>
+        )}
+        {view === 'all' && (
+          <button onClick={() => { if (!db) return; const row = addRow(db.id); openRow(row.id, db.id); }} style={{ ...navBtnStyle, width: 'auto', padding: '0 12px', gap: 5, fontSize: 'var(--text-xs)', fontWeight: 600, color: '#fff', background: 'var(--gradient-accent)', border: 'none' }}>
+            <IconPlus size={13} /> Add task
+          </button>
+        )}
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', background: 'var(--color-bg-base)' }}>
+        {view === 'all' ? (
+          <AllTasksList tasks={tasks} users={users} todayStr={todayStr} dbId={db?.id ?? ''} onOpen={(id) => db && openRow(id, db.id)} onDelete={(id) => db && deleteRow(db.id, id)} />
+        ) : (
+        <>
+        {/* Due today & soon strip */}
+        <div style={{ padding: '12px 24px', borderBottom: '0.5px solid var(--color-border-subtle)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: dueSoon.length > 0 ? 8 : 0, color: 'var(--color-amber)' }}>
+            <IconAlarm size={14} /><span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Due today &amp; soon{dueSoon.length > 0 ? ` · ${dueSoon.length}` : ''}</span>
+          </div>
+          {dueSoon.length === 0 ? (
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 6 }}>No Tasks Due Soon.</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+              {dueSoon.map(t => {
+                const d = daysFromToday(t.due);
+                const tag = d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `In ${d} days`;
+                const tagColor = d === 0 ? 'var(--color-amber)' : 'var(--color-accent-bright)';
+                return (
+                  <div key={t.id} style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', top: 6, right: 22, zIndex: 2, fontSize: 8, fontWeight: 700, color: tagColor, pointerEvents: 'none' }}>{tag}</span>
+                    <TaskCard t={t} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Week grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(140px, 1fr))', gap: 0, minHeight: 320 }}>
+          {weekDates.map((d, i) => {
+            const key = weekKeys[i];
+            const isToday = key === todayStr;
+            const dayTasks = byDay(key);
+            return (
+              <div key={key} style={{ borderRight: i < 6 ? '0.5px solid var(--color-border-subtle)' : 'none', display: 'flex', flexDirection: 'column', background: isToday ? 'var(--color-accent-subtle)' : 'transparent' }}>
+                {/* Day header */}
+                <div style={{ padding: '10px 10px 8px', borderBottom: '0.5px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, background: isToday ? 'var(--color-accent-subtle)' : 'var(--color-bg-base)', zIndex: 1 }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: isToday ? 'var(--color-accent-bright)' : 'var(--color-text-muted)' }}>{DAY_NAMES[i]}</div>
+                    <div style={{ fontSize: 'var(--text-md)', fontWeight: 800, color: isToday ? 'var(--color-accent-bright)' : 'var(--color-text-secondary)', lineHeight: 1 }}>{d.getDate()}</div>
+                  </div>
+                  <button onClick={() => addOnDay(key)} title="Add task" className="day-add"
+                    style={{ width: 20, height: 20, borderRadius: 5, border: 'none', background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--color-accent-bright)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.color = 'var(--color-text-muted)'; }}>
+                    <IconPlus size={12} />
+                  </button>
+                </div>
+                {/* Day tasks */}
+                <div style={{ flex: 1, padding: '8px', overflowY: 'auto' }}>
+                  {dayTasks.length === 0
+                    ? <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textAlign: 'center', padding: '12px 0', opacity: 0.5 }}>—</div>
+                    : dayTasks.map(t => <TaskCard key={t.id} t={t} />)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── All-tasks list — grouped by urgency, editable & deletable ─────────────────
+function AllTasksList({ tasks, users, todayStr, dbId, onOpen, onDelete }: {
+  tasks: { id: string; name: string; status: string; assignee: string; priority: string; due: string }[];
+  users: { id: string; name: string; initials: string; color: string; avatar_url?: string }[];
+  todayStr: string;
+  dbId: string;
+  onOpen: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const isDone = (s: string) => s === 'Done' || s === 'Completed';
+  const daysBetween = (a: string, b: string) => Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
+
+  // Relative due text + colour
+  const dueInfo = (due: string, done: boolean): { text: string; color: string } => {
+    if (!due) return { text: 'No date', color: 'var(--color-text-muted)' };
+    if (done) return { text: new Date(due).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), color: 'var(--color-text-muted)' };
+    const d = daysBetween(todayStr, due);
+    if (d < 0) return { text: `${Math.abs(d)}d late`, color: 'var(--color-red)' };
+    if (d === 0) return { text: 'Today', color: 'var(--color-amber)' };
+    if (d === 1) return { text: 'Tomorrow', color: 'var(--color-amber)' };
+    if (d <= 7) return { text: `In ${d} days`, color: 'var(--color-accent-bright)' };
+    return { text: new Date(due).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), color: 'var(--color-text-secondary)' };
+  };
+
+  // Build urgency buckets
+  const active = tasks.filter(t => !isDone(t.status));
+  const done = tasks.filter(t => isDone(t.status));
+  const groups: { key: string; label: string; color: string; items: typeof tasks }[] = [
+    { key: 'late',   label: 'Late',        color: 'var(--color-red)',           items: active.filter(t => t.due && t.due < todayStr) },
+    { key: 'today',  label: 'Due today',   color: 'var(--color-amber)',         items: active.filter(t => t.due === todayStr) },
+    { key: 'soon',   label: 'Due soon (7 days)', color: 'var(--color-accent-bright)', items: active.filter(t => t.due && t.due > todayStr && daysBetween(todayStr, t.due) <= 7) },
+    { key: 'later',  label: 'Later',       color: 'var(--color-text-secondary)', items: active.filter(t => t.due && daysBetween(todayStr, t.due) > 7) },
+    { key: 'nodate', label: 'No due date', color: 'var(--color-text-muted)',    items: active.filter(t => !t.due) },
+    { key: 'done',   label: 'Completed',   color: 'var(--color-green)',         items: done },
+  ].filter(g => g.items.length > 0);
+
+  const Row = ({ t }: { t: typeof tasks[number] }) => {
+    const scfg = t.status ? getStatusConfig(t.status) : null;
+    const pcfg = t.priority ? getPriorityConfig(t.priority) : null;
+    const u = users.find(x => x.id === t.assignee);
+    const done = isDone(t.status);
+    const di = dueInfo(t.due, done);
+    return (
+      <div onClick={() => onOpen(t.id)}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, cursor: 'pointer', background: 'var(--color-bg-elevated)', border: '0.5px solid var(--color-border-default)', marginBottom: 6, opacity: done ? 0.6 : 1, transition: 'border-color 100ms' }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = scfg?.color ?? 'var(--color-accent)'; const del = e.currentTarget.querySelector('.row-del') as HTMLElement | null; if (del) del.style.opacity = '1'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; const del = e.currentTarget.querySelector('.row-del') as HTMLElement | null; if (del) del.style.opacity = '0'; }}
+      >
+        {scfg && <span style={{ width: 9, height: 9, borderRadius: '50%', background: scfg.color, flexShrink: 0 }} title={t.status} />}
+        <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: done ? 'line-through' : 'none' }}>{t.name}</span>
+        {pcfg && <span style={{ fontSize: 10, fontWeight: 700, color: pcfg.color, flexShrink: 0 }}>{t.priority}</span>}
+        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: di.color, flexShrink: 0, minWidth: 64, textAlign: 'right' }}>{di.text}</span>
+        {u && (u.avatar_url
+          ? <img src={u.avatar_url} alt={u.initials} style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+          : <span style={{ width: 22, height: 22, borderRadius: '50%', background: u.color, color: '#fff', fontSize: 8, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title={u.name}>{u.initials}</span>)}
+        <button className="row-del" onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} title="Delete task"
+          style={{ width: 22, height: 22, borderRadius: 5, border: 'none', background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, flexShrink: 0, transition: 'opacity 80ms, color 80ms' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-red)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; }}>
+          <IconTrash size={13} />
+        </button>
+      </div>
+    );
+  };
+
+  if (tasks.length === 0) {
+    return <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>No tasks yet.</div>;
+  }
+
+  return (
+    <div style={{ padding: '20px 24px', maxWidth: 820, margin: '0 auto' }}>
+      {groups.map(g => (
+        <div key={g.key} style={{ marginBottom: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: g.color }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: g.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{g.label}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)' }}>{g.items.length}</span>
+          </div>
+          {g.items.map(t => <Row key={t.id} t={t} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const navBtnStyle: React.CSSProperties = {
+  width: 30, height: 30, borderRadius: 7, border: '0.5px solid var(--color-border-default)',
+  background: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+};
+
 // ── Main slug page ────────────────────────────────────────────────────────────
 export default function SlugPage({ params }: PageProps) {
   const { slug } = params;
@@ -554,6 +868,11 @@ export default function SlugPage({ params }: PageProps) {
   const database = Object.values(databases).find((db) => db.page_id === page.id);
   if (!database) {
     return <EmptyPage pageId={page.id} title={page.title} icon={page.icon} iconColor={page.iconColor} />;
+  }
+
+  // To-Do pages (main + private) get a weekly timetable planner
+  if (page.type === 'todo') {
+    return <TodoTimetable pageId={page.id} pageTitle={page.title} pageIcon={page.icon} pageIconColor={page.iconColor} />;
   }
 
   // Files page gets a custom visual browser

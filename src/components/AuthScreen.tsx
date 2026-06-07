@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
+import { isSupabaseConfigured, signInSupabase, signUpSupabase, sendResetEmail } from '@/lib/auth';
 import { IconLock, IconMail, IconUser, IconShieldCheck, IconClock, IconLogout } from '@tabler/icons-react';
 
 export function AuthScreen() {
@@ -40,15 +41,50 @@ export function AuthScreen() {
 
   const submit = () => {
     setError(''); setNotice('');
-    if (mode === 'reset') {
-      void handleReset();
-      return;
-    }
+    if (mode === 'reset') { void handleReset(); return; }
+    if (isSupabaseConfigured) { void handleSupabaseAuth(); return; }
+    // Local prototype fallback
     const res = mode === 'signin' ? signIn(email, password) : signUp(name, email, password);
     if (!res.ok) setError(res.error ?? 'Something went wrong.');
   };
 
+  // Real auth via Supabase — the SupabaseAuthSync bridge picks up the session.
+  const handleSupabaseAuth = async () => {
+    if (mode === 'signup' && !name.trim()) { setError('Please enter your name.'); return; }
+    if (!email.trim() || !password) { setError('Email and password are required.'); return; }
+    setSending(true);
+    try {
+      if (mode === 'signin') {
+        const res = await signInSupabase(email, password);
+        if (!res.ok) setError(res.error ?? 'Could not sign in.');
+      } else {
+        const res = await signUpSupabase(name, email, password);
+        if (!res.ok) { setError(res.error ?? 'Could not create account.'); return; }
+        if (res.needsConfirm) {
+          setNotice('Account created. Check your email to confirm, then sign in.');
+          setMode('signin');
+        }
+        // If confirmation is off, the session is live and the app loads automatically
+        // (a new account waits on the "approval" screen until an admin approves it).
+      }
+    } catch {
+      setError('Could not reach the authentication service.');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleReset = async () => {
+    // Supabase: send a real password-reset email
+    if (isSupabaseConfigured) {
+      if (!email.trim()) { setError('Enter your account email.'); return; }
+      setSending(true);
+      const res = await sendResetEmail(email);
+      setSending(false);
+      if (!res.ok) { setError(res.error ?? 'Could not send reset email.'); return; }
+      setNotice(`We sent a password-reset link to ${email.trim()}. Check your inbox.`);
+      return;
+    }
     if (resetStep === 'request') {
       // 1) generate a code locally, 2) email it via the API
       const gen = requestResetCode(email);
@@ -173,7 +209,7 @@ export function AuthScreen() {
         </p>
       )}
 
-      {mode === 'signin' && (
+      {mode === 'signin' && !isSupabaseConfigured && (
         <div style={{ marginTop: 18, padding: '10px 12px', borderRadius: 8, background: 'var(--color-bg-active)', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--color-text-secondary)', fontWeight: 600, marginBottom: 3 }}>
             <IconShieldCheck size={12} /> Demo admin login

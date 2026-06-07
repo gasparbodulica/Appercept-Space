@@ -223,13 +223,12 @@ const CASHFLOW_COLS: Column[] = [
   { id: 'cfc-notes',   database_id: 'db-cashflow', name: 'Notes',       type: 'text',   position: 6, config: {}, hidden: false, width: 220 },
 ];
 
+// Operating cash flow is auto-derived from real revenue (Clients/Consulting/ClubCrowd)
+// and real costs (Costs DB). This statement holds only NON-operating movements —
+// Investing (equipment, asset purchases) and Financing (owner draws, loans).
 const CASHFLOW_ROWS: Row[] = [
-  { id: 'cfr-1', database_id: 'db-cashflow', position: 0, created_by: 'u-1', created_at: '2026-06-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z', cells: { 'cfc-item': 'Medikal Lux retainer', 'cfc-activity': 'Operating', 'cfc-dir': 'Inflow', 'cfc-amount': 5600, 'cfc-date': '2026-06-01', 'cfc-company': 'Appercept' } },
-  { id: 'cfr-2', database_id: 'db-cashflow', position: 1, created_by: 'u-1', created_at: '2026-06-02T00:00:00Z', updated_at: '2026-06-02T00:00:00Z', cells: { 'cfc-item': '24 Sata retainer', 'cfc-activity': 'Operating', 'cfc-dir': 'Inflow', 'cfc-amount': 8400, 'cfc-date': '2026-06-02', 'cfc-company': 'Appercept' } },
-  { id: 'cfr-3', database_id: 'db-cashflow', position: 2, created_by: 'u-1', created_at: '2026-06-03T00:00:00Z', updated_at: '2026-06-03T00:00:00Z', cells: { 'cfc-item': 'Freelance dev payment', 'cfc-activity': 'Operating', 'cfc-dir': 'Outflow', 'cfc-amount': 800, 'cfc-date': '2026-06-03', 'cfc-company': 'Appercept' } },
-  { id: 'cfr-4', database_id: 'db-cashflow', position: 3, created_by: 'u-1', created_at: '2026-06-05T00:00:00Z', updated_at: '2026-06-05T00:00:00Z', cells: { 'cfc-item': 'New MacBook Pro', 'cfc-activity': 'Investing', 'cfc-dir': 'Outflow', 'cfc-amount': 2800, 'cfc-date': '2026-06-05', 'cfc-company': 'Appercept', 'cfc-notes': 'Workstation upgrade' } },
-  { id: 'cfr-5', database_id: 'db-cashflow', position: 4, created_by: 'u-1', created_at: '2026-06-10T00:00:00Z', updated_at: '2026-06-10T00:00:00Z', cells: { 'cfc-item': 'Owner draw', 'cfc-activity': 'Financing', 'cfc-dir': 'Outflow', 'cfc-amount': 3000, 'cfc-date': '2026-06-10', 'cfc-company': 'Appercept' } },
-  { id: 'cfr-6', database_id: 'db-cashflow', position: 5, created_by: 'u-1', created_at: '2026-06-12T00:00:00Z', updated_at: '2026-06-12T00:00:00Z', cells: { 'cfc-item': 'Voice Bot consulting fee', 'cfc-activity': 'Operating', 'cfc-dir': 'Inflow', 'cfc-amount': 3500, 'cfc-date': '2026-06-12', 'cfc-company': 'Appercept' } },
+  { id: 'cfr-4', database_id: 'db-cashflow', position: 0, created_by: 'u-1', created_at: '2026-06-05T00:00:00Z', updated_at: '2026-06-05T00:00:00Z', cells: { 'cfc-item': 'New MacBook Pro', 'cfc-activity': 'Investing', 'cfc-dir': 'Outflow', 'cfc-amount': 2800, 'cfc-date': '2026-06-05', 'cfc-company': 'Appercept', 'cfc-notes': 'Workstation upgrade' } },
+  { id: 'cfr-5', database_id: 'db-cashflow', position: 1, created_by: 'u-1', created_at: '2026-06-10T00:00:00Z', updated_at: '2026-06-10T00:00:00Z', cells: { 'cfc-item': 'Owner draw', 'cfc-activity': 'Financing', 'cfc-dir': 'Outflow', 'cfc-amount': 3000, 'cfc-date': '2026-06-10', 'cfc-company': 'Appercept', 'cfc-notes': 'Monthly profit distribution' } },
 ];
 
 // ─── BALANCE SHEET ────────────────────────────────────────────────────────────

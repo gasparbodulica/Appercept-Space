@@ -10,10 +10,7 @@ export const WORKSPACE: Workspace = {
 };
 
 export const USERS: User[] = [
-  { id: 'u-1', workspace_id: 'ws-1', name: 'Gašpar Bodulica', email: 'gaspar@appercept.net', role: 'admin', initials: 'GB', color: '#4f6fff' },
-  { id: 'u-2', workspace_id: 'ws-1', name: 'Karlo Casni', email: 'kcasni@appercept.net', role: 'member', initials: 'KC', color: '#3ecf8e' },
-  { id: 'u-3', workspace_id: 'ws-1', name: 'Design Lead', email: 'design@appercept.net', role: 'member', initials: 'DL', color: '#a78bfa' },
-  { id: 'u-4', workspace_id: 'ws-1', name: 'Dev Freelancer', email: 'dev@appercept.net', role: 'member', initials: 'DF', color: '#2dd4bf' },
+  { id: 'u-1', workspace_id: 'ws-1', name: 'Gašpar Bodulica', email: 'gbodulica@appercept.net', role: 'admin', initials: 'GB', color: '#4f6fff' },
 ];
 
 // Per-user PRIVATE To-Do — one page+database each, only visible to its owner
@@ -39,6 +36,7 @@ export const PAGES: Page[] = [
   { id: 'p-costs', workspace_id: 'ws-1', title: 'P&L Account', icon: 'IconCurrencyEuro', iconColor: '#f5c518', type: 'costs', position: 8, slug: 'costs' },
   { id: 'p-cashflow', workspace_id: 'ws-1', title: 'Cash Flow Statement', icon: 'IconArrowsExchange', iconColor: '#2dd4bf', type: 'custom', position: 8.1, slug: 'cashflow' },
   { id: 'p-balance', workspace_id: 'ws-1', title: 'Balance Sheet', icon: 'IconScale', iconColor: '#60a5fa', type: 'custom', position: 8.2, slug: 'balance-sheet' },
+  { id: 'p-forecast', workspace_id: 'ws-1', title: 'Forecast', icon: 'IconChartLine', iconColor: '#3ecf8e', type: 'custom', position: 8.3, slug: 'forecast' },
   { id: 'p-files', workspace_id: 'ws-1', title: 'Files', icon: 'IconFolder', iconColor: '#6b7280', type: 'files', position: 9, slug: 'files' },
   { id: 'p-passwords', workspace_id: 'ws-1', title: 'Passwords', icon: 'IconLock', iconColor: '#ff4f6a', type: 'passwords', position: 10, slug: 'passwords' },
   { id: 'p-clubcrowd', workspace_id: 'ws-1', title: 'ClubCrowd Clients', icon: 'IconMusic', iconColor: '#f472b6', type: 'clubcrowd', position: 11, slug: 'clubcrowd' },
@@ -421,16 +419,14 @@ export const PAGE_DB_MAP: Record<string, string> = {
 // ─── LOGIN ACCOUNTS ───────────────────────────────────────────────────────────
 // The admin account always exists so there's a way in. Others sign up and wait
 // for the admin to grant access.
+// Real accounts come from Supabase auth now. Only the owner remains as the seed
+// admin (and the demo accounts are stripped from any saved data on load).
 export const ACCOUNTS: Account[] = [
-  // ── Approved internal team ────────────────────────────────────────────────
-  { id: 'acc-admin', name: 'Gašpar Bodulica',  email: 'gaspar@appercept.net',    password: 'appercept', approved: true,  role: 'admin',  initials: 'GB', color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
-  { id: 'acc-2',     name: 'Karlo Casni',       email: 'kcasni@appercept.net',    password: 'demo1234',  approved: true,  role: 'member', initials: 'KC', color: '#2ee89a', created_at: '2026-02-01T00:00:00Z' },
-  // ── Approved clients (assigned portal) ───────────────────────────────────
-  { id: 'acc-cl-1',  name: 'Albert Karner',     email: 'albert@medikallux.hr',    password: 'medikal',   approved: true,  role: 'client', client_company: 'Medikal Lux d.o.o.', initials: 'AK', color: '#a78bfa', created_at: '2026-05-10T00:00:00Z' },
-  // ── Pending — waiting for admin approval ─────────────────────────────────
-  { id: 'acc-p1',    name: 'Ana Jurić',         email: 'ana@appercept.net',       password: 'test1234',  approved: false, role: 'viewer', initials: 'AJ', color: '#f472b6', created_at: '2026-06-04T09:12:00Z' },
-  { id: 'acc-p2',    name: 'Ivan Perić',        email: 'ivan@gymbros.hr',         password: 'gymbros',   approved: false, role: 'viewer', initials: 'IP', color: '#fb923c', created_at: '2026-06-05T14:30:00Z' },
+  { id: 'acc-admin', name: 'Gašpar Bodulica', email: 'gbodulica@appercept.net', password: 'appercept', approved: true, role: 'admin', initials: 'GB', color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
 ];
+
+// Demo accounts to purge from persisted localStorage (migration in store.ts).
+export const REMOVED_DEMO_EMAILS = ['gaspar@appercept.net', 'kcasni@appercept.net', 'albert@medikallux.hr', 'ana@appercept.net', 'ivan@gymbros.hr'];
 
 // ─── MESSAGING (Teams-like) ───────────────────────────────────────────────────
 export const CHANNELS: Channel[] = [
@@ -486,9 +482,13 @@ export const ACTIVITIES: Activity[] = [
 import type { TeamRole, ProjectShare } from './types';
 
 export const TEAM_ROLES: TeamRole[] = [
-  { id: 'tr-1', name: 'Gašpar Bodulica', user_id: 'u-1', role_title: 'Lead / Strategy', email: 'gaspar@appercept.net', default_share: 45, is_external: false, color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
-  { id: 'tr-2', name: 'Karlo Casni',     user_id: 'u-2', role_title: 'Development',     email: 'kcasni@appercept.net', default_share: 25, is_external: false, color: '#2ee89a', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'tr-1', name: 'Gašpar Bodulica', user_id: 'u-1', role_title: 'Lead / Strategy', email: 'gbodulica@appercept.net', default_share: 70, is_external: false, color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
 ];
+
+// Demo people (workspace users + team roles) to strip from saved data — by ID,
+// so re-adding someone later (with a fresh ID) is never blocked.
+export const REMOVED_DEMO_USER_IDS = ['u-2', 'u-3', 'u-4'];
+export const REMOVED_DEMO_ROLE_IDS = ['tr-2'];
 // Company retention = 100 − sum of all role shares (auto-calculated in UI)
 // Default: 45 + 25 = 70% team, 30% stays in Appercept
 

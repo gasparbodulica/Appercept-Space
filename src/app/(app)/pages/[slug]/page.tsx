@@ -7,6 +7,8 @@ import { DatabasePage } from '@/components/database/DatabasePage';
 import { Topbar } from '@/components/layout/Topbar';
 import { PageIcon } from '@/lib/icons';
 import { PageEditPopover } from '@/components/PageEditPopover';
+import { FinancialStatementView } from '@/components/FinancialStatementView';
+import { ForecastView } from '@/components/ForecastView';
 import { formatDate, getStatusConfig, getPriorityConfig, isOverdue } from '@/lib/utils';
 import {
   IconTablePlus, IconLock, IconSearch, IconFileTypePdf, IconPresentation,
@@ -865,6 +867,11 @@ export default function SlugPage({ params }: PageProps) {
     );
   }
 
+  // Forecast is computed (no database) — render before the DB lookup
+  if (slug === 'forecast') {
+    return <ForecastView pageId={page.id} pageTitle={page.title} pageIcon={page.icon} pageIconColor={page.iconColor} />;
+  }
+
   const database = Object.values(databases).find((db) => db.page_id === page.id);
   if (!database) {
     return <EmptyPage pageId={page.id} title={page.title} icon={page.icon} iconColor={page.iconColor} />;
@@ -890,6 +897,12 @@ export default function SlugPage({ params }: PageProps) {
   // ClubCrowd gets a venue dashboard
   if (slug === 'clubcrowd') {
     return <ClubCrowdDashboard pageId={page.id} pageTitle={page.title} pageIcon={page.icon} pageIconColor={page.iconColor} />;
+  }
+
+  // Financial statements render as real statements + editable records
+  if (slug === 'costs' || slug === 'cashflow' || slug === 'balance-sheet') {
+    const kind = slug === 'costs' ? 'pl' : slug === 'cashflow' ? 'cashflow' : 'balance';
+    return <FinancialStatementView kind={kind} pageId={page.id} pageTitle={page.title} pageIcon={page.icon} pageIconColor={page.iconColor} />;
   }
 
   return (

@@ -214,7 +214,7 @@ export function AuthScreen() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--color-text-secondary)', fontWeight: 600, marginBottom: 3 }}>
             <IconShieldCheck size={12} /> Demo admin login
           </div>
-          gaspar@appercept.net · password <b style={{ color: 'var(--color-text-secondary)' }}>appercept</b>
+          gbodulica@appercept.net · password <b style={{ color: 'var(--color-text-secondary)' }}>appercept</b>
         </div>
       )}
     </Shell>

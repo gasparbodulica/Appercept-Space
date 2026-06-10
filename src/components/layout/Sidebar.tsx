@@ -23,7 +23,7 @@ export function Sidebar() {
   // Consulting & ClubCrowd are separate ventures — pulled out of the HQ teamspace flow.
   const VENTURE_SLUGS = ['consulting', 'clubcrowd'];
   // P&L, Cash Flow & Balance Sheet form the Financial Statements section.
-  const FINANCIAL_SLUGS = ['costs', 'cashflow', 'balance-sheet'];
+  const FINANCIAL_SLUGS = ['costs', 'cashflow', 'balance-sheet', 'forecast'];
   const hqPages = visiblePages.filter((p) => !p.owner_id && !VENTURE_SLUGS.includes(p.slug) && !FINANCIAL_SLUGS.includes(p.slug));
   const venturePages = visiblePages.filter((p) => !p.owner_id && VENTURE_SLUGS.includes(p.slug));
   // Keep Financial Statements in a fixed, logical order (P&L → Cash Flow → Balance Sheet)

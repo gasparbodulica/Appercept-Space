@@ -23,7 +23,9 @@ export function clientMatches(value: string, company: string) {
  * mode 'agency' → the team replies; mode 'client' → the client asks.
  */
 export function ClientPortalView({ company, mode }: { company: string; mode: 'agency' | 'client' }) {
-  const { databases, pages, users, portalMessages, addPortalMessage, markPortalRead } = useAppStore();
+  const { databases, pages, users, portalMessages, addPortalMessage, markPortalRead, portalColors } = useAppStore();
+  const customColor = portalColors[company];
+  const tileBg = customColor ? `linear-gradient(135deg, ${customColor}, ${customColor}cc)` : 'var(--gradient-accent)';
 
   // Mark this client's messages as read when the view mounts or the company changes
   useEffect(() => { if (company) markPortalRead(company); }, [company]);
@@ -110,7 +112,7 @@ export function ClientPortalView({ company, mode }: { company: string; mode: 'ag
             <circle cx={32} cy={32} r={R} fill="none" stroke={health.color} strokeWidth={3.5}
               strokeDasharray={`${dash} ${CIRC}`} strokeLinecap="round" />
           </svg>
-          <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: 'var(--gradient-accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 22, boxShadow: '0 4px 18px rgba(0,210,255,0.3)' }}>{initial}</div>
+          <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: tileBg, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 22, boxShadow: '0 4px 18px rgba(0,210,255,0.3)' }}>{initial}</div>
         </div>
         <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-text-primary)' }}>{company}</h1>

@@ -1,12 +1,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { USERS } from '@/lib/seed';
 import { Topbar } from '@/components/layout/Topbar';
 import { WeatherWidget } from '@/components/WeatherWidget';
 import { computeCompanyFinance, computeClientRevenue, computeConsultingRevenue, computeClubRevenue, type CompanyFinance } from '@/lib/finance';
 import { TeamCapacityHeatmap } from '@/components/TeamCapacityHeatmap';
+import { WorldClocks } from '@/components/WorldClocks';
 import { IconCircleCheck, IconCircleFilled, IconCalendar, IconFileText, IconCurrencyEuro, IconSun, IconSunset, IconMoon, IconTrendingUp, IconTrendingDown, IconBuildingFactory2, IconAlertTriangle, IconMusic, IconChevronRight, IconBrandStripe, IconWallet, IconScale, IconArrowsExchange, IconClockHour4 } from '@tabler/icons-react';
 import { getStatusConfig, getPriorityConfig, formatDate, formatDateTime, isOverdue } from '@/lib/utils';
 
@@ -21,8 +22,10 @@ const TODAY = new Date().toLocaleDateString('en-US', { weekday: 'long', month: '
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { databases, pages } = useAppStore();
-  const currentUser = USERS[0];
+  const { databases, pages, users } = useAppStore();
+  // The greeting follows the signed-in person (real account), not a seed constant.
+  const account = useCurrentAccount();
+  const currentUser = account ?? users[0] ?? USERS[0];
 
   // Derive data from databases
   const todoDb = Object.values(databases).find((db) => {
@@ -219,7 +222,8 @@ export default function DashboardPage() {
             </h1>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>{TODAY}</p>
           </div>
-          <WeatherWidget />
+          {/* World clocks, inline (no box) */}
+          <WorldClocks />
         </div>
 
         {/* Stats */}

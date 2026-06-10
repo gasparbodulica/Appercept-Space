@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Database, Row, Column, CellValue, Comment, Activity, Notification, Page, ViewConfig, Filter, Sort, User, Workspace, Account, Channel, ChatMessage, PortalMessage, AbsenceEntry, TeamRole, ProjectShare } from './types';
-import { DATABASES, PAGES, USERS, WORKSPACE, COMMENTS, ACTIVITIES, NOTIFICATIONS, ACCOUNTS, CHANNELS, CHAT_MESSAGES, PORTAL_MESSAGES, TEAM_ROLES, PROJECT_SHARES } from './seed';
+import { DATABASES, PAGES, USERS, WORKSPACE, COMMENTS, ACTIVITIES, NOTIFICATIONS, ACCOUNTS, CHANNELS, CHAT_MESSAGES, PORTAL_MESSAGES, TEAM_ROLES, PROJECT_SHARES, REMOVED_DEMO_EMAILS, REMOVED_DEMO_USER_IDS, REMOVED_DEMO_ROLE_IDS } from './seed';
 import { isSupabaseConfigured } from './supabase';
 import { signOutSupabase } from './auth';
 
@@ -28,11 +28,15 @@ interface AppState {
   // Client portal Q&A
   portalMessages: PortalMessage[];
   portalReadAt: Record<string, string>; // clientName → ISO timestamp last read by team
+  portalColors: Record<string, string>; // company name → custom accent colour
 
   // Revenue sharing
   teamRoles: TeamRole[];
   projectShares: ProjectShare[];
   companyRetentionPct: number; // % the company keeps (default 30)
+
+  // Forecast assumptions (editable predictions layered on the real run-rate)
+  forecastAssumptions: { monthlyConsulting: number; quarterlyGrowthPct: number; annualTarget: number };
 
   // Team availability
   absences: AbsenceEntry[];
@@ -128,12 +132,16 @@ interface AppState {
   // Actions — client portal
   addPortalMessage: (client: string, body: string, from?: 'client' | 'team') => void;
   markPortalRead: (client: string) => void;
+  setPortalColor: (company: string, color: string) => void;
+  renameClientCompany: (oldName: string, newName: string) => void;
+  deleteClientCompany: (company: string) => void;
 
   // Actions — revenue sharing
   addTeamRole: (role: Omit<TeamRole, 'id' | 'created_at'>) => void;
   updateTeamRole: (id: string, updates: Partial<Omit<TeamRole, 'id' | 'created_at'>>) => void;
   deleteTeamRole: (id: string) => void;
   setCompanyRetentionPct: (pct: number) => void;
+  setForecastAssumptions: (updates: Partial<AppState['forecastAssumptions']>) => void;
   addProjectShare: (share: Omit<ProjectShare, 'id' | 'created_at'>) => void;
   deleteProjectShare: (id: string) => void;
 
@@ -177,9 +185,11 @@ export const useAppStore = create<AppState>()(
       chatMessages: CHAT_MESSAGES,
       portalMessages: PORTAL_MESSAGES,
       portalReadAt: {},
+      portalColors: {},
       teamRoles: TEAM_ROLES,
       projectShares: PROJECT_SHARES,
       companyRetentionPct: 30,
+      forecastAssumptions: { monthlyConsulting: 0, quarterlyGrowthPct: 0, annualTarget: 100000 },
       absences: [],
       comments: COMMENTS,
       activities: ACTIVITIES,
@@ -719,6 +729,66 @@ export const useAppStore = create<AppState>()(
 
       markPortalRead: (client) => set((s) => ({ portalReadAt: { ...s.portalReadAt, [client]: new Date().toISOString() } })),
 
+      setPortalColor: (company, color) => set((s) => ({ portalColors: { ...s.portalColors, [company]: color } })),
+
+      // Rename a client company everywhere it's referenced (Clients DB rows,
+      // portal messages, read state, colours, and client logins).
+      renameClientCompany: (oldName, newName) => set((s) => {
+        const clean = newName.trim();
+        if (!clean || clean === oldName) return {};
+        const clientsDb = Object.values(s.databases).find((d) => d.id === 'db-clients'
+          || (d.columns.some((c) => c.name === 'Company') && d.columns.some((c) => c.name === 'Status')));
+        const databases = { ...s.databases };
+        if (clientsDb) {
+          const compCol = clientsDb.columns.find((c) => c.name === 'Company');
+          if (compCol) {
+            databases[clientsDb.id] = {
+              ...clientsDb,
+              rows: clientsDb.rows.map((r) =>
+                String(r.cells[compCol.id] ?? '') === oldName
+                  ? { ...r, cells: { ...r.cells, [compCol.id]: clean } }
+                  : r),
+            };
+          }
+        }
+        const portalColors = { ...s.portalColors };
+        if (portalColors[oldName] !== undefined) { portalColors[clean] = portalColors[oldName]; delete portalColors[oldName]; }
+        const portalReadAt = { ...s.portalReadAt };
+        if (portalReadAt[oldName] !== undefined) { portalReadAt[clean] = portalReadAt[oldName]; delete portalReadAt[oldName]; }
+        return {
+          databases,
+          portalColors,
+          portalReadAt,
+          portalMessages: s.portalMessages.map((m) => m.client === oldName ? { ...m, client: clean } : m),
+          accounts: s.accounts.map((a) => a.client_company === oldName ? { ...a, client_company: clean } : a),
+        };
+      }),
+
+      // Delete a client portal: remove its Clients DB rows, messages, and colour.
+      // Client login accounts are kept (manage them in Settings → Access).
+      deleteClientCompany: (company) => set((s) => {
+        const clientsDb = Object.values(s.databases).find((d) => d.id === 'db-clients'
+          || (d.columns.some((c) => c.name === 'Company') && d.columns.some((c) => c.name === 'Status')));
+        const databases = { ...s.databases };
+        if (clientsDb) {
+          const compCol = clientsDb.columns.find((c) => c.name === 'Company');
+          if (compCol) {
+            databases[clientsDb.id] = {
+              ...clientsDb,
+              rows: clientsDb.rows.filter((r) => String(r.cells[compCol.id] ?? '') !== company),
+            };
+          }
+        }
+        const portalColors = { ...s.portalColors }; delete portalColors[company];
+        const portalReadAt = { ...s.portalReadAt }; delete portalReadAt[company];
+        return {
+          databases,
+          portalColors,
+          portalReadAt,
+          portalMessages: s.portalMessages.filter((m) => m.client !== company),
+        };
+      }),
+
       // ── Absences ───────────────────────────────────────────────────────────
       addAbsence: (entry) => {
         const absence: AbsenceEntry = { ...entry, id: generateId('abs'), created_at: new Date().toISOString() };
@@ -734,6 +804,7 @@ export const useAppStore = create<AppState>()(
       updateTeamRole: (id, updates) => set((s) => ({ teamRoles: s.teamRoles.map((r) => r.id === id ? { ...r, ...updates } : r) })),
       deleteTeamRole: (id) => set((s) => ({ teamRoles: s.teamRoles.filter((r) => r.id !== id) })),
       setCompanyRetentionPct: (pct) => set({ companyRetentionPct: Math.max(0, Math.min(100, pct)) }),
+      setForecastAssumptions: (updates) => set((s) => ({ forecastAssumptions: { ...s.forecastAssumptions, ...updates } })),
       addProjectShare: (share) => {
         const newShare: ProjectShare = { ...share, id: generateId('ps'), created_at: new Date().toISOString() };
         set((s) => ({ projectShares: [newShare, ...s.projectShares] }));
@@ -759,7 +830,12 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ users: [...s.users, newUser] }));
       },
       removeMember: (userId) => {
-        set((s) => ({ users: s.users.filter((u) => u.id !== userId) }));
+        // Remove the workspace user AND their revenue-split role (linked by user_id),
+        // so a removed member disappears from the dashboard and Revenue everywhere.
+        set((s) => ({
+          users: s.users.filter((u) => u.id !== userId),
+          teamRoles: s.teamRoles.filter((r) => r.user_id !== userId),
+        }));
       },
 
       // ── Pages ──────────────────────────────────────────────────────────────
@@ -799,9 +875,11 @@ export const useAppStore = create<AppState>()(
         chatMessages: state.chatMessages,
         portalMessages: state.portalMessages,
         portalReadAt: state.portalReadAt,
+        portalColors: state.portalColors,
         teamRoles: state.teamRoles,
         projectShares: state.projectShares,
         companyRetentionPct: state.companyRetentionPct,
+        forecastAssumptions: state.forecastAssumptions,
         absences: state.absences,
         comments: state.comments,
         activities: state.activities,
@@ -942,6 +1020,10 @@ export const useAppStore = create<AppState>()(
           // Workspace (incl. uploaded logo) is always preserved across loads.
           workspace: p.workspace ?? current.workspace,
           databases: mergedDatabases,
+          // Strip demo team members everywhere (workspace users + revenue roles),
+          // by ID so re-adding people later is never blocked.
+          users: (p.users ?? current.users).filter((u) => !REMOVED_DEMO_USER_IDS.includes(u.id)),
+          teamRoles: (p.teamRoles ?? current.teamRoles).filter((r) => !REMOVED_DEMO_ROLE_IDS.includes(r.id)),
           // Seed pages keep their slot/order but adopt any persisted edits
           // (rename/icon/colour); user-created pages are appended after.
           // 'p-team' is explicitly dropped — the Team & Roles DB was removed.
@@ -949,11 +1031,24 @@ export const useAppStore = create<AppState>()(
             ...PAGES.map((sp) => persistedPages.find((pp) => pp.id === sp.id) ?? sp),
             ...persistedPages.filter((pp) => pp.id !== 'p-team' && !PAGES.some((sp) => sp.id === pp.id)),
           ],
-          // Seed accounts (admin always exists) with persisted state, plus signups.
-          accounts: [
-            ...ACCOUNTS.map((sa) => persistedAccounts.find((pa) => pa.id === sa.id) ?? sa),
-            ...persistedAccounts.filter((pa) => !ACCOUNTS.some((sa) => sa.id === pa.id)),
-          ],
+          // Seed admin + persisted accounts, with the old demo accounts stripped
+          // and deduped by email (a real Supabase UUID account wins over the seed
+          // placeholder for the same email).
+          accounts: (() => {
+            const demo = new Set(REMOVED_DEMO_EMAILS.map((e) => e.toLowerCase()));
+            const base = [
+              ...ACCOUNTS.map((sa) => persistedAccounts.find((pa) => pa.id === sa.id) ?? sa),
+              ...persistedAccounts.filter((pa) => !ACCOUNTS.some((sa) => sa.id === pa.id)),
+            ].filter((a) => !demo.has(a.email.toLowerCase()));
+            const byEmail = new Map<string, typeof base[number]>();
+            for (const a of base) {
+              const key = a.email.toLowerCase();
+              const existing = byEmail.get(key);
+              // Prefer a real (non-seed) account id over the 'acc-…' placeholder
+              if (!existing || (existing.id.startsWith('acc-') && !a.id.startsWith('acc-'))) byEmail.set(key, a);
+            }
+            return Array.from(byEmail.values());
+          })(),
           sessionAccountId: p.sessionAccountId ?? null,
         };
       },

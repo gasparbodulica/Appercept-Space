@@ -6,7 +6,7 @@ import { computeClientHealth } from '@/lib/health';
 import { Topbar } from '@/components/layout/Topbar';
 import { ClientPortalView, clientMatches, normalize } from '@/components/ClientPortalView';
 import { findClientsDb } from '@/lib/finance';
-import { IconArrowLeft, IconBuilding, IconBriefcase, IconPlus, IconX, IconCheck, IconUser, IconLock, IconMail, IconUserPlus } from '@tabler/icons-react';
+import { IconArrowLeft, IconBuilding, IconBriefcase, IconPlus, IconX, IconCheck, IconUser, IconLock, IconMail, IconUserPlus, IconDots, IconTrash } from '@tabler/icons-react';
 
 function clientStatusFor(clientsDb: ReturnType<typeof findClientsDb>, company: string) {
   if (!clientsDb) return 'Active';
@@ -187,11 +187,15 @@ const Field = ({ icon, placeholder, value, onChange, onEnter, type = 'text', ref
 );
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+const PORTAL_COLORS = ['#1c75bc','#00d2ff','#3ecf8e','#a78bfa','#fb923c','#f472b6','#2dd4bf','#f5c518','#ff5c5c','#60a5fa'];
+
 export default function ClientPortalPage() {
-  const { databases, pages, portalMessages, portalReadAt, accounts } = useAppStore();
+  const { databases, pages, portalMessages, portalReadAt, accounts, portalColors, setPortalColor, renameClientCompany, deleteClientCompany } = useAppStore();
   const healthFor = (company: string) => computeClientHealth(company, databases, pages, portalMessages);
   const account = useCurrentAccount();
   const isAdmin = account?.role === 'admin';
+  const [editMenu, setEditMenu] = useState<string | null>(null); // company being edited
+  const [renameVal, setRenameVal] = useState('');
 
   const dbBySlug = (slug: string) =>
     Object.values(databases).find((d) => pages.some((p) => p.id === d.page_id && p.slug === slug));
@@ -317,11 +321,14 @@ export default function ClientPortalPage() {
             const health = healthFor(c.name);
             const R = 22, CIRC = 2 * Math.PI * R;
             const dash = (health.score / 100) * CIRC;
+            const portalColor = portalColors[c.name];
+            const tileBg = portalColor ? `linear-gradient(135deg, ${portalColor}, ${portalColor}cc)` : 'var(--gradient-accent)';
             return (
               <div
                 key={c.id}
                 onClick={() => setSelected(c.name)}
                 style={{
+                  position: 'relative',
                   background: 'var(--color-bg-elevated)',
                   border: '0.5px solid var(--color-border-default)',
                   borderRadius: 'var(--card-radius)',
@@ -333,6 +340,51 @@ export default function ClientPortalPage() {
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--color-accent-bright)'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,210,255,0.18)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.25)'; e.currentTarget.style.transform = 'translateY(0)'; }}
               >
+                {/* Edit menu (admin) */}
+                {isAdmin && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setRenameVal(c.name); setEditMenu(editMenu === c.name ? null : c.name); }}
+                    title="Edit portal"
+                    style={{ position: 'absolute', top: 12, right: 12, width: 26, height: 26, borderRadius: 7, border: 'none', background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+                  >
+                    <IconDots size={15} />
+                  </button>
+                )}
+                {editMenu === c.name && (
+                  <>
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={(e) => { e.stopPropagation(); setEditMenu(null); }} />
+                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: 44, right: 12, width: 230, zIndex: 50, background: 'var(--color-bg-popover)', border: '0.5px solid var(--color-border-strong)', borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.55)', padding: 14 }}>
+                      <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginBottom: 6 }}>Portal name</div>
+                      <input
+                        value={renameVal}
+                        onChange={(e) => setRenameVal(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { renameClientCompany(c.name, renameVal); setEditMenu(null); } }}
+                        style={{ width: '100%', padding: '7px 9px', borderRadius: 7, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', outline: 'none', boxSizing: 'border-box', marginBottom: 12 }}
+                      />
+                      <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginBottom: 8 }}>Colour</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 14 }}>
+                        {PORTAL_COLORS.map((col) => (
+                          <button key={col} onClick={() => setPortalColor(c.name, col)}
+                            style={{ width: 22, height: 22, borderRadius: '50%', background: col, border: portalColor === col ? '2.5px solid #fff' : '1.5px solid transparent', cursor: 'pointer', padding: 0, flexShrink: 0 }} />
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => { renameClientCompany(c.name, renameVal); setEditMenu(null); }}
+                          style={{ flex: 1, padding: '7px 0', borderRadius: 7, border: 'none', background: 'var(--gradient-accent)', color: '#fff', fontWeight: 600, fontSize: 'var(--text-xs)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                          <IconCheck size={12} /> Save
+                        </button>
+                        <button
+                          onClick={() => { if (confirm(`Delete the portal for "${c.name}"? This removes its client records and messages. Login accounts stay (manage in Settings).`)) { deleteClientCompany(c.name); setEditMenu(null); } }}
+                          title="Delete portal"
+                          style={{ padding: '7px 11px', borderRadius: 7, border: '0.5px solid rgba(255,79,106,0.4)', background: 'none', color: 'var(--color-red)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <IconTrash size={12} /> Delete
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                   {/* Health score ring */}
                   <div style={{ position: 'relative', flexShrink: 0, width: 52, height: 52 }}>
@@ -342,7 +394,7 @@ export default function ClientPortalPage() {
                         strokeDasharray={`${dash} ${CIRC}`} strokeLinecap="round"
                         style={{ transition: 'stroke-dasharray 600ms ease' }} />
                     </svg>
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--gradient-accent)', borderRadius: '50%', margin: 4, color: '#fff', fontWeight: 800, fontSize: 17 }}>
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: tileBg, borderRadius: '50%', margin: 4, color: '#fff', fontWeight: 800, fontSize: 17 }}>
                       {initial}
                     </div>
                     {unread > 0 && (

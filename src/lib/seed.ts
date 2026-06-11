@@ -31,7 +31,7 @@ export const PAGES: Page[] = [
   { id: 'p-clients', workspace_id: 'ws-1', title: 'Clients', icon: 'IconUsers', iconColor: '#2ee89a', type: 'clients', position: 2, slug: 'clients' },
   { id: 'p-projects', workspace_id: 'ws-1', title: 'Projects', icon: 'IconFolderOpen', iconColor: '#a78bfa', type: 'projects', position: 3, slug: 'projects' },
   { id: 'p-consulting', workspace_id: 'ws-1', title: 'Consulting', icon: 'IconBriefcase', iconColor: '#00d2ff', type: 'custom', position: 4, slug: 'consulting' },
-  { id: 'p-meetings', workspace_id: 'ws-1', title: 'Meetings', icon: 'IconCalendar', iconColor: '#fb923c', type: 'meetings', position: 6, slug: 'meetings', badge: 3 },
+  { id: 'p-meetings', workspace_id: 'ws-1', title: 'Meetings', icon: 'IconCalendar', iconColor: '#fb923c', type: 'meetings', position: 6, slug: 'meetings' },
   { id: 'p-companies', workspace_id: 'ws-1', title: 'Companies', icon: 'IconBuildingFactory2', iconColor: '#60a5fa', type: 'companies', position: 7, slug: 'companies' },
   { id: 'p-costs', workspace_id: 'ws-1', title: 'P&L Account', icon: 'IconCurrencyEuro', iconColor: '#f5c518', type: 'costs', position: 8, slug: 'costs' },
   { id: 'p-cashflow', workspace_id: 'ws-1', title: 'Cash Flow Statement', icon: 'IconArrowsExchange', iconColor: '#2dd4bf', type: 'custom', position: 8.1, slug: 'cashflow' },

@@ -1040,7 +1040,7 @@ export const useAppStore = create<AppState>()(
           // (rename/icon/colour); user-created pages are appended after.
           // 'p-team' is explicitly dropped — the Team & Roles DB was removed.
           pages: [
-            ...PAGES.map((sp) => persistedPages.find((pp) => pp.id === sp.id) ?? sp),
+            ...PAGES.map((sp) => { const pp = persistedPages.find((pp) => pp.id === sp.id) ?? sp; return { ...pp, badge: sp.badge }; }),
             ...persistedPages.filter((pp) => pp.id !== 'p-team' && !PAGES.some((sp) => sp.id === pp.id)),
           ],
           // Seed admin + persisted accounts, with the old demo accounts stripped

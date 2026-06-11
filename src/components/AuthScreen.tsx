@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { isSupabaseConfigured, signInSupabase, signUpSupabase, sendResetEmail } from '@/lib/auth';
 import { IconLock, IconMail, IconUser, IconShieldCheck, IconClock, IconLogout } from '@tabler/icons-react';
@@ -10,6 +10,15 @@ export function AuthScreen() {
   const account = useCurrentAccount();
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin');
   const [resetStep, setResetStep] = useState<'request' | 'verify'>('request');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('signup') === '1') {
+        setMode('signup');
+      }
+    }
+  }, []);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

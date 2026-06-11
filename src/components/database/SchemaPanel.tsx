@@ -158,52 +158,71 @@ export function SchemaPanel({ databaseId, onClose }: SchemaPanelProps) {
         {/* Main column list */}
         {!typePanelId && !optionsPanelId && (
           <>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
               {columns.map(col => {
                 const meta = getTypeMeta(col.type);
                 const hasOpts = OPTION_TYPES.has(col.type);
+                const expanded = editingId === col.id;
                 return (
-                  <div key={col.id} style={{ borderBottom: '0.5px solid var(--color-border-subtle)' }}>
-                    {/* Column row */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px' }}>
-                      <span style={{ color: 'var(--color-text-muted)', display: 'flex', flexShrink: 0 }}>{meta.icon}</span>
-                      {editingId === col.id ? (
-                        <input autoFocus value={editingName} onChange={e => setEditingName(e.target.value)}
+                  <div key={col.id} style={{ borderBottom: '0.5px solid var(--color-border-subtle)', background: expanded ? 'var(--color-bg-hover)' : 'transparent' }}>
+                    {/* Always-visible row: icon + name + bin */}
+                    <div
+                      onClick={() => { if (!expanded) { setEditingId(col.id); setEditingName(col.name); } }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', cursor: expanded ? 'default' : 'pointer' }}
+                      onMouseEnter={e => { if (!expanded) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+                      onMouseLeave={e => { if (!expanded) e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <span style={{ color: 'var(--color-accent-bright)', display: 'flex', flexShrink: 0 }}>{meta.icon}</span>
+                      <span style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', fontWeight: 500 }}>{col.name}</span>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginRight: 4 }}>{meta.label}</span>
+                      {col.position !== 0 && (
+                        <button
+                          onClick={e => { e.stopPropagation(); deleteColumn(databaseId, col.id); if (editingId === col.id) setEditingId(null); }}
+                          title="Delete property"
+                          style={{ display: 'flex', padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', borderRadius: 5, flexShrink: 0 }}
+                          onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'var(--color-red-bg)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'none'; }}
+                        >
+                          <IconTrash size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Expanded inline editor */}
+                    {expanded && (
+                      <div style={{ padding: '0 14px 12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {/* Rename */}
+                        <input
+                          autoFocus
+                          value={editingName}
+                          onChange={e => setEditingName(e.target.value)}
                           onBlur={() => commitName(col.id)}
                           onKeyDown={e => { if (e.key === 'Enter') commitName(col.id); if (e.key === 'Escape') setEditingId(null); }}
-                          style={{ flex: 1, background: 'var(--color-bg-elevated)', border: '0.5px solid var(--color-accent)', borderRadius: 5, padding: '3px 8px', fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', outline: 'none', fontFamily: 'var(--font-sans)' }} />
-                      ) : (
-                        <span onClick={() => { setEditingId(col.id); setEditingName(col.name); }}
-                          style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', cursor: 'text' }}>
-                          {col.name}
-                        </span>
-                      )}
-                      {col.position !== 0 && (
-                        <button onClick={() => { if (confirmDeleteId === col.id) { deleteColumn(databaseId, col.id); setConfirmDeleteId(null); } else setConfirmDeleteId(col.id); }}
-                          style={{ display: 'flex', padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: confirmDeleteId === col.id ? 'var(--color-red)' : 'var(--color-text-muted)', borderRadius: 4, flexShrink: 0, fontSize: 'var(--text-xs)', gap: 3, alignItems: 'center' }}
-                          title={confirmDeleteId === col.id ? 'Click again to confirm' : 'Delete property'}>
-                          <IconTrash size={13} />
-                          {confirmDeleteId === col.id && <span>Confirm</span>}
+                          placeholder="Property name"
+                          style={{ width: '100%', background: 'var(--color-bg-input)', border: '0.5px solid var(--color-accent)', borderRadius: 6, padding: '7px 10px', fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', outline: 'none', fontFamily: 'var(--font-sans)', boxSizing: 'border-box' }}
+                        />
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => setTypePanelId(col.id)}
+                            style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '6px 10px', borderRadius: 6, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-input)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', cursor: 'pointer' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-active)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-bg-input)')}>
+                            {meta.icon} {meta.label} <IconChevronRight size={11} />
+                          </button>
+                          {hasOpts && (
+                            <button onClick={() => setOptionsPanelId(col.id)}
+                              style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '6px 10px', borderRadius: 6, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-input)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', cursor: 'pointer' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-active)')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-bg-input)')}>
+                              Options ({(col.config?.options ?? []).length}) <IconChevronRight size={11} />
+                            </button>
+                          )}
+                        </div>
+                        <button onClick={() => setEditingId(null)}
+                          style={{ alignSelf: 'flex-end', padding: '4px 10px', borderRadius: 5, border: '0.5px solid var(--color-border-subtle)', background: 'none', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
+                          Done
                         </button>
-                      )}
-                    </div>
-                    {/* Sub-actions */}
-                    <div style={{ display: 'flex', gap: 4, padding: '0 14px 8px 38px' }}>
-                      <button onClick={() => setTypePanelId(col.id)}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 5, border: '0.5px solid var(--color-border-subtle)', background: 'none', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)', cursor: 'pointer' }}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                        {meta.icon} {meta.label} <IconChevronRight size={11} />
-                      </button>
-                      {hasOpts && (
-                        <button onClick={() => setOptionsPanelId(col.id)}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 5, border: '0.5px solid var(--color-border-subtle)', background: 'none', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)', cursor: 'pointer' }}
-                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
-                          onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                          Options ({(col.config?.options ?? []).length}) <IconChevronRight size={11} />
-                        </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

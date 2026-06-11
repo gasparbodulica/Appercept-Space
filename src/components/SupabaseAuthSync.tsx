@@ -23,8 +23,15 @@ export function SupabaseAuthSync() {
     const apply = async (userId: string | undefined, justSignedIn: boolean) => {
       if (!userId) { setAuthedAccount(null); return; }
       const acc = await fetchProfile(userId);
-      if (active && acc) setAuthedAccount(acc, justSignedIn);
-      else if (active) setAuthedAccount(null);
+      if (active && acc) {
+        setAuthedAccount(acc, justSignedIn);
+        // Keep a cross-domain cookie so appercept.net can greet by first name.
+        // Set every load so it's always fresh regardless of WelcomeScreen.
+        const firstName = acc.name.trim().split(/\s+/)[0];
+        if (firstName) {
+          document.cookie = `appercept_fn=${encodeURIComponent(firstName)}; domain=.appercept.net; max-age=${365 * 24 * 3600}; path=/; SameSite=Lax`;
+        }
+      } else if (active) setAuthedAccount(null);
     };
 
     // 1) Resolve the existing session on load — treat a remembered session as

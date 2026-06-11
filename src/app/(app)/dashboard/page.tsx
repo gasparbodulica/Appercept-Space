@@ -80,12 +80,24 @@ export default function DashboardPage() {
 
   // Diagnostic: what the finance engine sees in the Projects DB
   const projDiag = (() => {
-    if (!projectsDb) return { found: false, rows: 0, upfrontCol: '', monthlyCol: '', sampleUpfront: 0, sampleMonthly: 0 };
+    if (!projectsDb) return { found: false, rows: 0, upfrontCol: '', monthlyCol: '', sampleUpfront: 0, sampleMonthly: 0, rowDetails: [] as Array<{ name: string; status: string; startDate: string; endDate: string; upfront: number; monthly: number }> };
     const uc = projectsDb.columns.find(c => c.id === 'pc-upfront' || c.name === 'Upfront (€)' || c.name === 'Upfront');
     const mc = projectsDb.columns.find(c => c.id === 'pc-monthly' || c.name === 'Monthly (€)' || c.name === 'Monthly');
+    const sc = projectsDb.columns.find(c => c.type === 'status');
+    const startC = projectsDb.columns.find(c => c.id === 'pc-start' || c.name === 'Start date');
+    const endC   = projectsDb.columns.find(c => c.id === 'pc-end'   || c.name === 'End date');
+    const nameC  = projectsDb.columns.find(c => c.position === 0);
     const su = uc ? projectsDb.rows.reduce((s, r) => s + (Number(r.cells[uc.id]) || 0), 0) : 0;
     const sm = mc ? projectsDb.rows.reduce((s, r) => s + (Number(r.cells[mc.id]) || 0), 0) : 0;
-    return { found: true, rows: projectsDb.rows.length, upfrontCol: uc?.id ?? '(not found)', monthlyCol: mc?.id ?? '(not found)', sampleUpfront: su, sampleMonthly: sm };
+    const rowDetails = projectsDb.rows.slice(0, 5).map(r => ({
+      name: nameC ? String(r.cells[nameC.id] ?? '—') : '—',
+      status: sc ? String(r.cells[sc.id] ?? '(empty)') : '(no status col)',
+      startDate: startC ? String(r.cells[startC.id] ?? '(empty)') : '(no start col)',
+      endDate: endC ? String(r.cells[endC.id] ?? '(empty)') : '(no end col)',
+      upfront: uc ? (Number(r.cells[uc.id]) || 0) : 0,
+      monthly: mc ? (Number(r.cells[mc.id]) || 0) : 0,
+    }));
+    return { found: true, rows: projectsDb.rows.length, upfrontCol: uc?.id ?? '(not found)', monthlyCol: mc?.id ?? '(not found)', sampleUpfront: su, sampleMonthly: sm, rowDetails };
   })();
 
   // ── ClubCrowd snapshot: season-adjusted yearly revenue + pipeline counts ──
@@ -679,7 +691,8 @@ function ClubCrowdSnapshot({ yearly, monthly, stages, connected, total, onOpen }
   );
 }
 
-function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCount, onOpenCosts, projDiag }: { f: CompanyFinance; upfront: number; recurring: number; clientCount: number; consultingCount: number; onOpenCosts: () => void; projDiag: { found: boolean; rows: number; upfrontCol: string; monthlyCol: string; sampleUpfront: number; sampleMonthly: number } }) {
+type ProjDiag = { found: boolean; rows: number; upfrontCol: string; monthlyCol: string; sampleUpfront: number; sampleMonthly: number; rowDetails: Array<{ name: string; status: string; startDate: string; endDate: string; upfront: number; monthly: number }> };
+function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCount, onOpenCosts, projDiag }: { f: CompanyFinance; upfront: number; recurring: number; clientCount: number; consultingCount: number; onOpenCosts: () => void; projDiag: ProjDiag }) {
   const profitPositive = f.profit >= 0;
   const profitColor = profitPositive ? 'var(--color-green)' : 'var(--color-red)';
 
@@ -724,15 +737,13 @@ function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCou
           <FinanceRow label="One-time payments" value={fmt(upfront)} color="var(--color-accent-bright)" sub={`${f.monthLabel} project upfronts (counted once)`} />
           <FinanceRow label="Recurring (projects)" value={fmt(recurring)} color="var(--color-teal)" sub={`${clientCount} active client${clientCount !== 1 ? 's' : ''} · every month`} />
           {upfront === 0 && recurring === 0 && projDiag.rows > 0 && (
-            <div style={{ fontSize: 10, color: 'var(--color-amber)', lineHeight: 1.5, padding: '6px 10px', background: 'rgba(245,158,11,0.08)', borderRadius: 7 }}>
+            <div style={{ fontSize: 10, color: 'var(--color-amber)', lineHeight: 1.6, padding: '8px 10px', background: 'rgba(245,158,11,0.08)', borderRadius: 7 }}>
               ⚠ {projDiag.rows} project row{projDiag.rows !== 1 ? 's' : ''} found but revenue = €0.<br />
-              Upfront col: <b>{projDiag.upfrontCol}</b> (raw total: €{projDiag.sampleUpfront})<br />
-              Monthly col: <b>{projDiag.monthlyCol}</b> (raw total: €{projDiag.sampleMonthly})<br />
-              {projDiag.upfrontCol === '(not found)' || projDiag.monthlyCol === '(not found)'
-                ? 'Column not found — rename to "Upfront (€)" and "Monthly (€)" in Projects.'
-                : projDiag.sampleUpfront === 0 && projDiag.sampleMonthly === 0
-                  ? 'Columns found but all values are 0 — enter values in the Projects table.'
-                  : 'Columns found but Start/End date or Status may be filtering all rows out.'}
+              {projDiag.rowDetails.map((r, i) => (
+                <span key={i} style={{ display: 'block', color: 'var(--color-text-secondary)', fontFamily: 'monospace', fontSize: 9 }}>
+                  {r.name} | status=&quot;{r.status}&quot; | start=&quot;{r.startDate}&quot; | end=&quot;{r.endDate}&quot; | upfront={r.upfront} | monthly={r.monthly}
+                </span>
+              ))}
             </div>
           )}
           <FinanceRow label="Consulting fees" value={fmt(f.consultingRevenue)} color="#a78bfa" sub={`${consultingCount} engagement${consultingCount !== 1 ? 's' : ''} this month`} />

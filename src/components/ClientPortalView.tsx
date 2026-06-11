@@ -75,13 +75,23 @@ export function ClientPortalView({ company, mode }: { company: string; mode: 'ag
     }));
   }, [filesDb, company]);
 
-  const clientStatus = useMemo(() => {
-    if (!clientsDb) return 'Active';
+  const clientRow = useMemo(() => {
+    if (!clientsDb) return null;
     const compCol = clientsDb.columns.find((c) => c.name === 'Company');
-    const statCol = clientsDb.columns.find((c) => c.name === 'Status');
-    const row = clientsDb.rows.find((r) => compCol && clientMatches(String(r.cells[compCol.id] ?? ''), company));
-    return statCol && row ? String(row.cells[statCol.id] ?? 'Active') : 'Active';
+    return clientsDb.rows.find((r) => compCol && clientMatches(String(r.cells[compCol.id] ?? ''), company)) ?? null;
   }, [clientsDb, company]);
+
+  const clientStatus = useMemo(() => {
+    if (!clientRow || !clientsDb) return 'Active';
+    const statCol = clientsDb.columns.find((c) => c.name === 'Status');
+    return statCol ? String(clientRow.cells[statCol.id] ?? 'Active') : 'Active';
+  }, [clientsDb, clientRow]);
+
+  const clientInfo = useMemo(() => {
+    if (!clientRow || !clientsDb) return {};
+    const get = (name: string) => { const col = clientsDb.columns.find(c => c.name === name); return col ? String(clientRow.cells[col.id] ?? '') : ''; };
+    return { email: get('Email'), phone: get('Phone'), revenue: get('Revenue'), name: get('Name'), notes: get('Notes') };
+  }, [clientsDb, clientRow]);
 
   const thread = useMemo(
     () => portalMessages.filter((m) => m.client === company).sort((a, b) => a.created_at.localeCompare(b.created_at)),
@@ -114,15 +124,15 @@ export function ClientPortalView({ company, mode }: { company: string; mode: 'ag
           </svg>
           <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: tileBg, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 22, boxShadow: '0 4px 18px rgba(0,210,255,0.3)' }}>{initial}</div>
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-text-primary)' }}>{company}</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 20, background: `${statusColor}22`, color: statusColor, fontSize: 'var(--text-xs)', fontWeight: 600 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: statusColor }} />{clientStatus}
             </span>
-            {industries.slice(0, 3).map((i) => (
-              <span key={i} style={{ padding: '2px 9px', borderRadius: 20, background: 'var(--color-bg-active)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>{i}</span>
-            ))}
+            {clientInfo.email && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{clientInfo.email}</span>}
+            {clientInfo.phone && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{clientInfo.phone}</span>}
+            {clientInfo.revenue && Number(clientInfo.revenue) > 0 && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-teal)', fontWeight: 600 }}>€{Number(clientInfo.revenue).toLocaleString()}/mo</span>}
           </div>
         </div>
         {/* Health score badge */}

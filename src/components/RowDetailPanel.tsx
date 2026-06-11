@@ -8,11 +8,12 @@ import { Column, CellValue, Row } from '@/lib/types';
 import { CellRenderer } from '@/components/database/CellRenderer';
 import {
   IconX, IconDots, IconPlus, IconMessageCircle, IconHistory,
-  IconPaperclip, IconSend, IconTrash,
+  IconPaperclip, IconSend, IconTrash, IconFolderOpen, IconExternalLink,
 } from '@tabler/icons-react';
+import { clientMatches } from '@/components/ClientPortalView';
 
 export function RowDetailPanel() {
-  const { openRowId, openDatabaseId, databases, closeRow, deleteRow, updateCell, comments, addComment, activities } = useAppStore();
+  const { openRowId, openDatabaseId, databases, pages, closeRow, deleteRow, updateCell, openRow, comments, addComment, activities } = useAppStore();
   const [commentText, setCommentText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -95,6 +96,83 @@ export function RowDetailPanel() {
               <PropertyRow key={col.id} column={col} value={row.cells[col.id] ?? null} onChange={(v) => updateCell(db.id, row.id, col.id, v)} row={row} databaseId={db.id} />
             ))}
           </Section>
+
+          {/* Client info — shown for Projects DB rows that have a Client set */}
+          {(() => {
+            if (db.id !== 'db-projects') return null;
+            const clientCol = db.columns.find(c => c.name === 'Client');
+            const clientName = clientCol ? String(row.cells[clientCol.id] ?? '') : '';
+            if (!clientName) return null;
+            const clientsDb = Object.values(databases).find(d => d.id === 'db-clients');
+            if (!clientsDb) return null;
+            const compCol = clientsDb.columns.find(c => c.name === 'Company');
+            const clientRow = clientsDb.rows.find(r => compCol && clientMatches(String(r.cells[compCol.id] ?? ''), clientName));
+            if (!clientRow) return null;
+            const get = (name: string) => { const col = clientsDb.columns.find(c => c.name === name); return col ? String(clientRow.cells[col.id] ?? '') : ''; };
+            const email = get('Email'), phone = get('Phone'), status = get('Status'), revenue = get('Revenue');
+            return (
+              <Section title="Client">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)' }}>{clientName}</div>
+                  {status && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Status: <span style={{ color: status === 'Active' ? 'var(--color-green)' : 'var(--color-amber)' }}>{status}</span></div>}
+                  {email && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{email}</div>}
+                  {phone && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{phone}</div>}
+                  {revenue && Number(revenue) > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-teal)', fontWeight: 600 }}>€{Number(revenue).toLocaleString()}/mo revenue</div>}
+                </div>
+              </Section>
+            );
+          })()}
+
+          {/* Linked Projects — shown for Clients DB rows */}
+          {(() => {
+            if (db.id !== 'db-clients') return null;
+            const compCol = db.columns.find(c => c.name === 'Company');
+            const companyName = compCol ? String(row.cells[compCol.id] ?? '') : '';
+            if (!companyName) return null;
+            const projectsDb = Object.values(databases).find(d =>
+              pages.some(p => p.id === d.page_id && p.slug === 'projects')
+            );
+            if (!projectsDb) return null;
+            const clientCol = projectsDb.columns.find(c => c.name === 'Client');
+            const nameCol = projectsDb.columns.find(c => c.position === 0);
+            const statusCol = projectsDb.columns.find(c => c.type === 'status');
+            const upfrontCol = projectsDb.columns.find(c => c.id === 'pc-upfront');
+            const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly');
+            const linked = projectsDb.rows.filter(r =>
+              clientCol && clientMatches(String(r.cells[clientCol.id] ?? ''), companyName)
+            );
+            return (
+              <Section title={`Projects (${linked.length})`}>
+                {linked.length === 0 ? (
+                  <div style={{ padding: '12px 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textAlign: 'center' }}>No projects assigned to this client</div>
+                ) : linked.map(proj => {
+                  const name = nameCol ? String(proj.cells[nameCol.id] ?? 'Untitled') : 'Untitled';
+                  const status = statusCol ? String(proj.cells[statusCol.id] ?? '') : '';
+                  const upfront = upfrontCol ? Number(proj.cells[upfrontCol.id] ?? 0) : 0;
+                  const monthly = monthlyCol ? Number(proj.cells[monthlyCol.id] ?? 0) : 0;
+                  return (
+                    <div key={proj.id}
+                      onClick={() => openRow(proj.id, projectsDb.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '0.5px solid var(--color-border-subtle)', cursor: 'pointer' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <IconFolderOpen size={14} style={{ color: 'var(--color-accent-bright)', flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+                        <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2, display: 'flex', gap: 8 }}>
+                          {status && <span>{status}</span>}
+                          {upfront > 0 && <span>€{upfront.toLocaleString()} upfront</span>}
+                          {monthly > 0 && <span>€{monthly.toLocaleString()}/mo</span>}
+                        </div>
+                      </div>
+                      <IconExternalLink size={12} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+                    </div>
+                  );
+                })}
+              </Section>
+            );
+          })()}
 
           {/* Comments */}
           <Section title={`Comments (${rowComments.length})`}>

@@ -1,7 +1,7 @@
 import { Database, Page } from './types';
 import {
   computeClientRevenue, computeConsultingRevenue, computeClubRevenue,
-  computeCompanyFinance, findCostsDb, findClientsDb,
+  computeCompanyFinance, computeProjectRevenue, findCostsDb, findClientsDb,
 } from './finance';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -24,32 +24,38 @@ export interface PLStatement {
 }
 
 export function computePL(databases: Record<string, Database>, pages: Page[]): PLStatement {
-  const clientsDb = findClientsDb(databases);
+  const clientsDb  = findClientsDb(databases);
+  const projectsDb = dbBySlug(databases, pages, 'projects');
   const consultingDb = dbBySlug(databases, pages, 'consulting');
-  const clubcrowdDb = dbBySlug(databases, pages, 'clubcrowd');
+  const clubcrowdDb  = dbBySlug(databases, pages, 'clubcrowd');
   const costsDb = findCostsDb(databases);
 
-  const retainers = computeClientRevenue(clientsDb).revenue;
+  const { upfrontThisMonth, monthlyRecurring } = computeProjectRevenue(projectsDb);
+  const retainers = computeClientRevenue(clientsDb).revenue; // manual cc-monthly retainers
   const consulting = computeConsultingRevenue(consultingDb).revenue;
   const clubs = computeClubRevenue(clubcrowdDb).monthlyAvg;
-  const fin = computeCompanyFinance(costsDb, 'Appercept', retainers, consulting, clubs);
+  const totalRevenue = upfrontThisMonth + monthlyRecurring + retainers + consulting + clubs;
+  const fin = computeCompanyFinance(costsDb, 'Appercept', retainers + monthlyRecurring, consulting, clubs);
 
   const revenueLines: MoneyLine[] = [
-    { label: 'Client retainers', amount: retainers, color: 'var(--color-teal)' },
+    { label: 'Project upfronts (this month)', amount: upfrontThisMonth, color: 'var(--color-accent-bright)' },
+    { label: 'Project monthly recurring', amount: monthlyRecurring, color: 'var(--color-teal)' },
+    { label: 'Client retainers', amount: retainers, color: '#2dd4bf' },
     { label: 'Consulting fees', amount: consulting, color: '#a78bfa' },
     { label: 'Club fees (ClubCrowd)', amount: clubs, color: '#635bff' },
   ].filter((l) => l.amount > 0);
 
   const costLines: MoneyLine[] = fin.byCategory.map((c) => ({ label: c.label, amount: c.amount, color: c.color }));
 
+  const netProfit = totalRevenue - fin.expenses;
   return {
     monthLabel: fin.monthLabel,
     revenueLines,
-    totalRevenue: fin.totalRevenue,
+    totalRevenue,
     costLines,
     totalCosts: fin.expenses,
-    netProfit: fin.profit,
-    margin: fin.totalRevenue > 0 ? Math.round((fin.profit / fin.totalRevenue) * 100) : 0,
+    netProfit,
+    margin: totalRevenue > 0 ? Math.round((netProfit / totalRevenue) * 100) : 0,
   };
 }
 

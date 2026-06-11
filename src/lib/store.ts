@@ -1051,16 +1051,26 @@ export const useAppStore = create<AppState>()(
         // Team & Roles DB was merged into the Team & Revenue page — drop it.
         delete mergedDatabases['db-team'];
 
-        // Migrate Clients DB: replace Revenue+Frequency with Monthly retainer column.
+        // Migrate Clients DB: replace Revenue+Frequency with Upfront + Monthly columns.
         const clientsDbM = mergedDatabases['db-clients'];
-        if (clientsDbM && clientsDbM.columns.some(c => c.id === 'cc-revenue') && !clientsDbM.columns.some(c => c.id === 'cc-monthly')) {
-          mergedDatabases['db-clients'] = {
-            ...clientsDbM,
-            columns: [
-              ...clientsDbM.columns.filter(c => c.id !== 'cc-revenue' && c.id !== 'cc-frequency'),
-              { id: 'cc-monthly', database_id: 'db-clients', name: 'Monthly retainer (€)', type: 'number' as const, position: 5, config: { prefix: '€' }, hidden: false, width: 160 },
-            ],
-          };
+        if (clientsDbM) {
+          const hasOldRevenue = clientsDbM.columns.some(c => c.id === 'cc-revenue');
+          const hasUpfront = clientsDbM.columns.some(c => c.id === 'cc-upfront');
+          const hasMonthly = clientsDbM.columns.some(c => c.id === 'cc-monthly');
+          if (hasOldRevenue || !hasUpfront || !hasMonthly) {
+            const base = clientsDbM.columns.filter(c => c.id !== 'cc-revenue' && c.id !== 'cc-frequency' && c.id !== 'cc-monthly');
+            const notesIdx = base.findIndex(c => c.name === 'Notes');
+            const insertAt = notesIdx >= 0 ? notesIdx : base.length;
+            mergedDatabases['db-clients'] = {
+              ...clientsDbM,
+              columns: [
+                ...base.slice(0, insertAt),
+                ...(!hasUpfront ? [{ id: 'cc-upfront', database_id: 'db-clients', name: 'Upfront (€)', type: 'number' as const, position: 5, config: { prefix: '€' }, hidden: false, width: 130 }] : []),
+                ...(!hasMonthly ? [{ id: 'cc-monthly', database_id: 'db-clients', name: 'Monthly (€)', type: 'number' as const, position: 6, config: { prefix: '€' }, hidden: false, width: 120 }] : []),
+                ...base.slice(insertAt),
+              ],
+            };
+          }
         }
 
         // Migrate projects: replace Budget (pc-budget) with Upfront + Monthly revenue columns.

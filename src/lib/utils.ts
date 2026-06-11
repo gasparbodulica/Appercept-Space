@@ -19,7 +19,11 @@ export function formatDate(dateStr: string | null | undefined): string {
 function formatSingleDate(dateStr: string): string {
   try {
     const d = new Date(dateStr + (dateStr.includes('T') ? '' : 'T12:00:00'));
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const day   = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year  = d.getFullYear();
+    const thisYear = new Date().getFullYear();
+    return year === thisYear ? `${day}/${month}` : `${day}/${month}/${year}`;
   } catch {
     return dateStr;
   }
@@ -29,8 +33,12 @@ export function formatDateTime(dateStr: string | null | undefined): string {
   if (!dateStr) return '—';
   try {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) +
-      ' · ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const day   = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year  = d.getFullYear();
+    const hours   = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} · ${hours}:${minutes}`;
   } catch {
     return dateStr;
   }

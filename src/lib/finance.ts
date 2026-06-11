@@ -260,6 +260,38 @@ export function computeClientRevenue(clientsDb: Database | undefined, projectsDb
   return { revenue: Math.round(revenue), activeCount };
 }
 
+/**
+ * Project revenue breakdown for the current month:
+ *   upfrontThisMonth — sum of pc-upfront for projects whose start date is this month
+ *                      (or have no start date, treating them as starting now)
+ *   monthlyRecurring — sum of pc-monthly for all non-completed projects
+ */
+export function computeProjectRevenue(projectsDb: Database | undefined): { upfrontThisMonth: number; monthlyRecurring: number } {
+  if (!projectsDb) return { upfrontThisMonth: 0, monthlyRecurring: 0 };
+  const upfrontCol = projectsDb.columns.find(c => c.id === 'pc-upfront');
+  const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly');
+  const startCol   = projectsDb.columns.find(c => c.name === 'Start date' || c.id === 'pc-start');
+  const statusCol  = projectsDb.columns.find(c => c.type === 'status');
+  const curYM = nowYM();
+  let upfrontThisMonth = 0, monthlyRecurring = 0;
+  for (const row of projectsDb.rows) {
+    const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
+    const isDone = status === 'Done' || status === 'Completed';
+    // Upfront: count if project started this month (or no start date = assume this month)
+    if (upfrontCol && !isDone) {
+      const startDate = startCol ? String(row.cells[startCol.id] ?? '') : '';
+      if (!startDate || ym(startDate) === curYM) {
+        upfrontThisMonth += Number(row.cells[upfrontCol.id]) || 0;
+      }
+    }
+    // Monthly: count all active projects
+    if (monthlyCol && !isDone) {
+      monthlyRecurring += Number(row.cells[monthlyCol.id]) || 0;
+    }
+  }
+  return { upfrontThisMonth: Math.round(upfrontThisMonth), monthlyRecurring: Math.round(monthlyRecurring) };
+}
+
 /** Effective total of a company's costs for the current month (all frequencies). */
 export function companyMonthlyExpenses(costsDb: Database | undefined, companyName: string): number {
   if (!costsDb || !companyName) return 0;

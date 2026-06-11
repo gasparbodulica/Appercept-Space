@@ -1062,6 +1062,16 @@ export const useAppStore = create<AppState>()(
             return Array.from(byEmail.values());
           })(),
           sessionAccountId: p.sessionAccountId ?? null,
+          // Pre-mark seed portal clients as read so demo messages never show as
+          // unread on a fresh install. Persisted read-stamps win if they exist.
+          portalReadAt: (() => {
+            const base = p.portalReadAt ?? {};
+            const merged = { ...base };
+            for (const msg of PORTAL_MESSAGES) {
+              if (!merged[msg.client]) merged[msg.client] = '2099-01-01T00:00:00Z';
+            }
+            return merged;
+          })(),
         };
       },
     }

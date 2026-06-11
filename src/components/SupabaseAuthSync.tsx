@@ -29,7 +29,7 @@ export function SupabaseAuthSync() {
         // Set every load so it's always fresh regardless of WelcomeScreen.
         const firstName = acc.name.trim().split(/\s+/)[0];
         if (firstName) {
-          document.cookie = `appercept_fn=${encodeURIComponent(firstName)}; domain=.appercept.net; max-age=${365 * 24 * 3600}; path=/; SameSite=Lax`;
+          document.cookie = `appercept_fn=${encodeURIComponent(firstName)}; domain=.appercept.net; max-age=${365 * 24 * 3600}; path=/; SameSite=Lax; Secure`;
         }
       } else if (active) setAuthedAccount(null);
     };

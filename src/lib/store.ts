@@ -1100,30 +1100,18 @@ export const useAppStore = create<AppState>()(
 
         // Migrate projects: always ensure Upfront (€) and Monthly (€) columns exist
         // with the canonical IDs the finance engine reads. Also drops the old Budget column.
+        // SAFE: never deletes existing columns or cell values — just adds missing canonical ones.
         const projDb = mergedDatabases['db-projects'];
         if (projDb) {
           const hasBudget  = projDb.columns.some(c => c.id === 'pc-budget');
           const hasUpfront = projDb.columns.some(c => c.id === 'pc-upfront');
           const hasMonthly = projDb.columns.some(c => c.id === 'pc-monthly');
           if (hasBudget || !hasUpfront || !hasMonthly) {
-            // Preserve any cell values already stored under a user-added "Upfront" or "Monthly"
-            // column (generated ID) by migrating those cells to the canonical IDs.
-            const altUpfront = !hasUpfront ? projDb.columns.find(c => /upfront/i.test(c.name)) : null;
-            const altMonthly = !hasMonthly ? projDb.columns.find(c => /monthly/i.test(c.name)) : null;
-            const migratedRows = (altUpfront || altMonthly)
-              ? projDb.rows.map(r => {
-                  const cells = { ...r.cells };
-                  if (altUpfront && cells[altUpfront.id] != null) { cells['pc-upfront'] = cells[altUpfront.id]; delete cells[altUpfront.id]; }
-                  if (altMonthly && cells[altMonthly.id] != null) { cells['pc-monthly'] = cells[altMonthly.id]; delete cells[altMonthly.id]; }
-                  return { ...r, cells };
-                })
-              : projDb.rows;
             mergedDatabases['db-projects'] = {
               ...projDb,
-              rows: migratedRows,
               columns: [
                 ...projDb.columns
-                  .filter(c => c.id !== 'pc-budget' && c.id !== altUpfront?.id && c.id !== altMonthly?.id)
+                  .filter(c => c.id !== 'pc-budget')
                   .map(c => c.id === 'pc-priority' ? { ...c, position: 8 } : c),
                 ...(!hasUpfront ? [{ id: 'pc-upfront', database_id: 'db-projects', name: 'Upfront (€)', type: 'number' as const, position: 6, config: { prefix: '€' }, hidden: false, width: 120 }] : []),
                 ...(!hasMonthly ? [{ id: 'pc-monthly', database_id: 'db-projects', name: 'Monthly (€)', type: 'number' as const, position: 7, config: { prefix: '€' }, hidden: false, width: 120 }] : []),

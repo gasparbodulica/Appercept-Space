@@ -276,12 +276,17 @@ export function computeProjectRevenue(projectsDb: Database | undefined): { upfro
       }
     }
 
-    // Monthly: counts every month from Start (or always if none) UNTIL End date passes.
+    // Monthly: counts every month. Stops only when End date is a valid ISO date in a
+    // clearly past month (YYYY-MM-DD format). Malformed / empty / non-ISO values are
+    // treated as "no end date" so nothing breaks if the cell has stray data.
     if (monthlyCol) {
       const monthly = Number(row.cells[monthlyCol.id]) || 0;
       if (monthly > 0) {
-        const started  = !startDate || ym(startDate) <= curYM;
-        const notEnded = !endDate   || ym(endDate)   >= curYM;
+        const started = !startDate || ym(startDate) <= curYM;
+        // Only stop counting if endDate is a real ISO date (starts with 4 digits + dash)
+        // whose year-month is strictly before the current month.
+        const endYM = endDate && /^\d{4}-\d{2}/.test(endDate) ? ym(endDate) : '';
+        const notEnded = !endYM || endYM >= curYM;
         if (started && notEnded) monthlyRecurring += monthly;
       }
     }

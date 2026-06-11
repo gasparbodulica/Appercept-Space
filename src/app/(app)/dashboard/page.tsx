@@ -78,6 +78,16 @@ export default function DashboardPage() {
   // This month's client revenue = upfront (one-time, this month) + recurring monthly
   const finance = computeCompanyFinance(costsDb, 'Appercept', upfrontThisMonth + monthlyRecurring, consultingRevenue, clubMonthlyAvg);
 
+  // Diagnostic: what the finance engine sees in the Projects DB
+  const projDiag = (() => {
+    if (!projectsDb) return { found: false, rows: 0, upfrontCol: '', monthlyCol: '', sampleUpfront: 0, sampleMonthly: 0 };
+    const uc = projectsDb.columns.find(c => c.id === 'pc-upfront' || c.name === 'Upfront (€)' || c.name === 'Upfront');
+    const mc = projectsDb.columns.find(c => c.id === 'pc-monthly' || c.name === 'Monthly (€)' || c.name === 'Monthly');
+    const su = uc ? projectsDb.rows.reduce((s, r) => s + (Number(r.cells[uc.id]) || 0), 0) : 0;
+    const sm = mc ? projectsDb.rows.reduce((s, r) => s + (Number(r.cells[mc.id]) || 0), 0) : 0;
+    return { found: true, rows: projectsDb.rows.length, upfrontCol: uc?.id ?? '(not found)', monthlyCol: mc?.id ?? '(not found)', sampleUpfront: su, sampleMonthly: sm };
+  })();
+
   // ── ClubCrowd snapshot: season-adjusted yearly revenue + pipeline counts ──
   const clubSeasonMonths = (label: string): number => {
     if (!label) return 12;
@@ -252,7 +262,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Appercept finances — revenue minus costs = monthly profit */}
-        <ApperceptFinanceBox f={finance} upfront={upfrontThisMonth} recurring={monthlyRecurring} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} />
+        <ApperceptFinanceBox f={finance} upfront={upfrontThisMonth} recurring={monthlyRecurring} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} projDiag={projDiag} />
 
         {/* Financial Overview — synthesised from Balance Sheet + Cash Flow + real costs/revenue */}
         {hasFinancials && (
@@ -669,7 +679,7 @@ function ClubCrowdSnapshot({ yearly, monthly, stages, connected, total, onOpen }
   );
 }
 
-function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCount, onOpenCosts }: { f: CompanyFinance; upfront: number; recurring: number; clientCount: number; consultingCount: number; onOpenCosts: () => void }) {
+function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCount, onOpenCosts, projDiag }: { f: CompanyFinance; upfront: number; recurring: number; clientCount: number; consultingCount: number; onOpenCosts: () => void; projDiag: { found: boolean; rows: number; upfrontCol: string; monthlyCol: string; sampleUpfront: number; sampleMonthly: number } }) {
   const profitPositive = f.profit >= 0;
   const profitColor = profitPositive ? 'var(--color-green)' : 'var(--color-red)';
 
@@ -713,6 +723,18 @@ function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCou
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center' }}>
           <FinanceRow label="One-time payments" value={fmt(upfront)} color="var(--color-accent-bright)" sub={`${f.monthLabel} project upfronts (counted once)`} />
           <FinanceRow label="Recurring (projects)" value={fmt(recurring)} color="var(--color-teal)" sub={`${clientCount} active client${clientCount !== 1 ? 's' : ''} · every month`} />
+          {upfront === 0 && recurring === 0 && projDiag.rows > 0 && (
+            <div style={{ fontSize: 10, color: 'var(--color-amber)', lineHeight: 1.5, padding: '6px 10px', background: 'rgba(245,158,11,0.08)', borderRadius: 7 }}>
+              ⚠ {projDiag.rows} project row{projDiag.rows !== 1 ? 's' : ''} found but revenue = €0.<br />
+              Upfront col: <b>{projDiag.upfrontCol}</b> (raw total: €{projDiag.sampleUpfront})<br />
+              Monthly col: <b>{projDiag.monthlyCol}</b> (raw total: €{projDiag.sampleMonthly})<br />
+              {projDiag.upfrontCol === '(not found)' || projDiag.monthlyCol === '(not found)'
+                ? 'Column not found — rename to "Upfront (€)" and "Monthly (€)" in Projects.'
+                : projDiag.sampleUpfront === 0 && projDiag.sampleMonthly === 0
+                  ? 'Columns found but all values are 0 — enter values in the Projects table.'
+                  : 'Columns found but Start/End date or Status may be filtering all rows out.'}
+            </div>
+          )}
           <FinanceRow label="Consulting fees" value={fmt(f.consultingRevenue)} color="#a78bfa" sub={`${consultingCount} engagement${consultingCount !== 1 ? 's' : ''} this month`} />
           <FinanceRow label="Club fees (ClubCrowd)" value={fmt(f.clubRevenue)} color="#7c75ff" sub="season-adjusted monthly avg" />
           <div style={{ height: '0.5px', background: 'var(--color-border-subtle)', margin: '2px 0' }} />

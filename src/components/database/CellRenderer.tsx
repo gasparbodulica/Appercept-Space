@@ -340,6 +340,10 @@ function EditCell({ column, value, onChange, onBlur, onTab, anchorRect }: {
   if (column.type === 'number') {
     return <input ref={inputRef} type="number" defaultValue={value !== null && value !== undefined ? String(value) : ''} onKeyDown={keyDown} onBlur={e => { onChange(e.target.value !== '' ? Number(e.target.value) : null); onBlur(); }} style={inputStyle} />;
   }
+  // Text columns named "Client" or "Company" get client autocomplete
+  if (column.type === 'text' && /client|company/i.test(column.name)) {
+    return <ClientAutocomplete value={String(value ?? '')} onChange={onChange} onBlur={onBlur} onTab={onTab} anchorRect={anchorRect} />;
+  }
   return <input ref={inputRef} type={column.type === 'email' ? 'email' : column.type === 'phone' ? 'tel' : column.type === 'url' ? 'url' : 'text'} defaultValue={value !== null && value !== undefined ? String(value) : ''} onKeyDown={keyDown} onBlur={e => { onChange(e.target.value || null); onBlur(); }} style={inputStyle} />;
 }
 
@@ -351,15 +355,10 @@ function DateEditCell({ value, onChange, onBlur, onTab }: {
   onBlur: () => void;
   onTab: (shift: boolean) => void;
 }) {
-  const todayIso = new Date().toISOString().split('T')[0];
   const existingVal = value ? String(value).split('|')[0] : '';
-  const dateVal = existingVal || todayIso;
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-    if (!existingVal) onChange(todayIso);
-  }, []);
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
   const keyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') onBlur();
@@ -368,15 +367,28 @@ function DateEditCell({ value, onChange, onBlur, onTab }: {
   };
 
   return (
-    <input
-      ref={inputRef}
-      type="date"
-      defaultValue={dateVal}
-      onKeyDown={keyDown}
-      onBlur={e => { onChange(e.target.value || null); onBlur(); }}
-      onChange={e => onChange(e.target.value || null)}
-      style={{ width: '100%', height: '100%', padding: '0 10px', background: 'var(--color-bg-input)', border: 'none', outline: 'none', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', fontFamily: 'var(--font-sans)', colorScheme: 'dark' }}
-    />
+    <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
+      <input
+        ref={inputRef}
+        type="date"
+        defaultValue={existingVal}
+        onKeyDown={keyDown}
+        onBlur={e => { onChange(e.target.value || null); onBlur(); }}
+        onChange={e => onChange(e.target.value || null)}
+        style={{ flex: 1, height: '100%', padding: '0 4px 0 10px', background: 'var(--color-bg-input)', border: 'none', outline: 'none', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', fontFamily: 'var(--font-sans)', colorScheme: 'dark' }}
+      />
+      {existingVal && (
+        <button
+          onMouseDown={e => { e.preventDefault(); onChange(null); onBlur(); }}
+          title="Clear date"
+          style={{ flexShrink: 0, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', marginRight: 4 }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-red)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
+        >
+          <IconX size={12} />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -576,6 +588,80 @@ function MultiSelectDropdown({ options, selected, onChange, onClose, anchorRect,
 }
 
 // ─── Person dropdown ──────────────────────────────────────────────────────────
+
+function ClientAutocomplete({ value, onChange, onBlur, onTab, anchorRect }: {
+  value: string;
+  onChange: (v: CellValue) => void;
+  onBlur: () => void;
+  onTab: (shift: boolean) => void;
+  anchorRect: DOMRect | null;
+}) {
+  const [q, setQ] = useState(value);
+  const databases = useAppStore(s => s.databases);
+  const clientsDb = Object.values(databases).find(d => d.id === 'db-clients');
+  const nameCol = clientsDb?.columns.find(c => c.position === 0);
+  const companyCol = clientsDb?.columns.find(c => c.name === 'Company');
+
+  const clientNames: string[] = [];
+  if (clientsDb && companyCol) {
+    clientsDb.rows.forEach(r => {
+      const company = String(r.cells[companyCol.id] ?? '').trim();
+      if (company && !clientNames.includes(company)) clientNames.push(company);
+    });
+  } else if (clientsDb && nameCol) {
+    clientsDb.rows.forEach(r => {
+      const name = String(r.cells[nameCol.id] ?? '').trim();
+      if (name && !clientNames.includes(name)) clientNames.push(name);
+    });
+  }
+
+  const filtered = q ? clientNames.filter(n => n.toLowerCase().includes(q.toLowerCase())) : clientNames;
+  const keyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') onBlur();
+    if (e.key === 'Tab') { e.preventDefault(); onTab(e.shiftKey); }
+    if (e.key === 'Enter') { onChange(q || null); onBlur(); }
+  };
+
+  return (
+    <DropdownPanel onClose={() => { onChange(q || null); onBlur(); }} anchorRect={anchorRect} minWidth={230}>
+      <div style={{ padding: '6px 8px', borderBottom: '0.5px solid var(--color-border-subtle)' }}>
+        <input
+          autoFocus
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          onKeyDown={keyDown}
+          placeholder="Type or pick a client…"
+          style={{ width: '100%', background: 'none', border: 'none', outline: 'none', fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)' }}
+        />
+      </div>
+      <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+        {filtered.length === 0 && q && (
+          <div onClick={() => { onChange(q); onBlur(); }} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+            Use &ldquo;{q}&rdquo;
+          </div>
+        )}
+        {filtered.map(name => (
+          <div key={name} onClick={() => { onChange(name); onBlur(); }}
+            style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 'var(--text-sm)', color: value === name ? 'var(--color-accent-bright)' : 'var(--color-text-primary)', background: value === name ? 'var(--color-bg-active)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+            onMouseEnter={e => { if (value !== name) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = value === name ? 'var(--color-bg-active)' : 'transparent'; }}>
+            {name}
+            {value === name && <span style={{ color: 'var(--color-accent)', fontSize: 12 }}>✓</span>}
+          </div>
+        ))}
+      </div>
+      {value && (
+        <div onClick={() => { onChange(null); onBlur(); }} style={{ padding: '8px 12px', cursor: 'pointer', borderTop: '0.5px solid var(--color-border-subtle)', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+          Clear
+        </div>
+      )}
+    </DropdownPanel>
+  );
+}
 
 function PersonDropdown({ value, onChange, onClose, anchorRect }: {
   value: string;

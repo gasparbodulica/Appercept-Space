@@ -18,8 +18,8 @@ export function formatDate(dateStr: string | null | undefined): string {
 
 function formatSingleDate(dateStr: string): string {
   try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const d = new Date(dateStr + (dateStr.includes('T') ? '' : 'T12:00:00'));
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   } catch {
     return dateStr;
   }
@@ -29,8 +29,8 @@ export function formatDateTime(dateStr: string | null | undefined): string {
   if (!dateStr) return '—';
   try {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) +
-      ' · ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) +
+      ' · ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   } catch {
     return dateStr;
   }

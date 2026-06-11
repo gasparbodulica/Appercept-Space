@@ -20,6 +20,7 @@ interface AppState {
   sessionAccountId: string | null;
   justSignedIn: boolean; // transient — triggers the welcome screen, not persisted
   authChecked: boolean;  // transient — true once the real (Supabase) session has been resolved
+  pendingInvites: { email: string; name: string; role: 'admin' | 'member' | 'viewer' }[];
 
   // Messaging
   channels: Channel[];
@@ -109,6 +110,8 @@ interface AppState {
   // Real (Supabase) auth bridge — set the signed-in user from the live session
   setAuthedAccount: (account: Account | null, justSignedIn?: boolean) => void;
   setAuthChecked: (v: boolean) => void;
+  addPendingInvite: (invite: { email: string; name: string; role: 'admin' | 'member' | 'viewer' }) => void;
+  removePendingInvite: (email: string) => void;
   changePassword: (currentPassword: string, newPassword: string) => { ok: boolean; error?: string };
   resetPassword: (email: string, newPassword: string) => { ok: boolean; error?: string };
   // Email-code reset flow
@@ -181,8 +184,8 @@ export const useAppStore = create<AppState>()(
       accounts: ACCOUNTS,
       sessionAccountId: null,
       justSignedIn: false,
-      // With real auth, wait for the live session before deciding; local prototype is ready immediately.
       authChecked: !isSupabaseConfigured,
+      pendingInvites: [],
       channels: CHANNELS,
       chatMessages: CHAT_MESSAGES,
       portalMessages: PORTAL_MESSAGES,
@@ -571,6 +574,8 @@ export const useAppStore = create<AppState>()(
       }),
       setAuthChecked: (v) => set({ authChecked: v }),
       clearJustSignedIn: () => set({ justSignedIn: false }),
+      addPendingInvite: (invite: { email: string; name: string; role: 'admin' | 'member' | 'viewer' }) => set((s) => ({ pendingInvites: [...s.pendingInvites.filter(i => i.email.toLowerCase() !== invite.email.toLowerCase()), invite] })),
+      removePendingInvite: (email: string) => set((s) => ({ pendingInvites: s.pendingInvites.filter(i => i.email.toLowerCase() !== email.toLowerCase()) })),
 
       changePassword: (currentPassword, newPassword) => {
         const acc = get().accounts.find((a) => a.id === get().sessionAccountId);
@@ -918,6 +923,7 @@ export const useAppStore = create<AppState>()(
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarNavOrder: state.sidebarNavOrder,
         currentUserId: state.currentUserId,
+        pendingInvites: state.pendingInvites,
       }),
       // Always merge seed databases & pages over persisted data so new
       // entries added in seed.ts are never silently missing after a deploy.
@@ -1090,6 +1096,7 @@ export const useAppStore = create<AppState>()(
             return Array.from(byEmail.values());
           })(),
           sessionAccountId: p.sessionAccountId ?? null,
+          pendingInvites: p.pendingInvites ?? [],
           // Pre-mark seed portal clients as read so demo messages never show as
           // unread on a fresh install. Persisted read-stamps win if they exist.
           portalReadAt: (() => {

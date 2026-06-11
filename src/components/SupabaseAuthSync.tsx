@@ -24,10 +24,16 @@ export function SupabaseAuthSync() {
       if (!userId) { setAuthedAccount(null); return; }
       const acc = await fetchProfile(userId);
       if (active && acc) {
-        setAuthedAccount(acc, justSignedIn);
-        // Keep a cross-domain cookie so appercept.net can greet by first name.
-        // Set every load so it's always fresh regardless of WelcomeScreen.
-        const firstName = acc.name.trim().split(/\s+/)[0];
+        // Check if admin pre-registered this email — if so, auto-approve and use the admin's name
+        const { pendingInvites, removePendingInvite } = useAppStore.getState();
+        const invite = pendingInvites.find(i => i.email.toLowerCase() === acc.email.toLowerCase());
+        const resolved = invite
+          ? { ...acc, name: invite.name, approved: true, role: invite.role as typeof acc.role }
+          : acc;
+        if (invite) removePendingInvite(invite.email);
+
+        setAuthedAccount(resolved, justSignedIn);
+        const firstName = resolved.name.trim().split(/\s+/)[0];
         if (firstName) {
           document.cookie = `appercept_fn=${encodeURIComponent(firstName)}; domain=.appercept.net; max-age=${365 * 24 * 3600}; path=/; SameSite=Lax; Secure`;
         }

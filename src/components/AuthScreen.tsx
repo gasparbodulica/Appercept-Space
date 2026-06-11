@@ -6,7 +6,7 @@ import { isSupabaseConfigured, signInSupabase, signUpSupabase, sendResetEmail } 
 import { IconLock, IconMail, IconUser, IconShieldCheck, IconClock, IconLogout } from '@tabler/icons-react';
 
 export function AuthScreen() {
-  const { signIn, signUp, signOut, requestResetCode, confirmReset, workspace } = useAppStore();
+  const { signIn, signUp, signOut, requestResetCode, confirmReset, workspace, pendingInvites } = useAppStore();
   const account = useCurrentAccount();
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin');
   const [resetStep, setResetStep] = useState<'request' | 'verify'>('request');
@@ -14,13 +14,24 @@ export function AuthScreen() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('signup') === '1') {
-        setMode('signup');
-      }
+      if (params.get('signup') === '1') setMode('signup');
     }
   }, []);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [inviteMatch, setInviteMatch] = useState<{ name: string; role: string } | null>(null);
+
+  const handleEmailChange = (v: string) => {
+    setEmail(v);
+    const match = pendingInvites.find(i => i.email.toLowerCase() === v.toLowerCase());
+    if (match) {
+      setInviteMatch(match);
+      setName(match.name);
+    } else {
+      setInviteMatch(null);
+    }
+  };
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [code, setCode] = useState('');
@@ -163,12 +174,19 @@ export function AuthScreen() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {mode === 'signup' && (
-          <Field icon={<IconUser size={15} />} placeholder="Full name" value={name} onChange={setName} onEnter={submit} />
+          <>
+            {inviteMatch && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', borderRadius: 7, background: 'rgba(46,232,154,0.1)', border: '0.5px solid rgba(46,232,154,0.3)', fontSize: 'var(--text-xs)', color: 'var(--color-green)' }}>
+                <IconShieldCheck size={13} /> You&apos;ve been pre-registered as <b style={{ marginLeft: 3 }}>{inviteMatch.role}</b>
+              </div>
+            )}
+            <Field icon={<IconUser size={15} />} placeholder="Full name" value={name} onChange={inviteMatch ? () => {} : setName} onEnter={submit} />
+          </>
         )}
 
         {/* Email: shown for signin/signup, and reset-request step */}
         {(mode !== 'reset' || resetStep === 'request') && (
-          <Field icon={<IconMail size={15} />} placeholder="Email" value={email} onChange={setEmail} onEnter={submit} type="email" />
+          <Field icon={<IconMail size={15} />} placeholder="Email" value={email} onChange={mode === 'signup' ? handleEmailChange : setEmail} onEnter={submit} type="email" />
         )}
 
         {/* Password for signin/signup */}

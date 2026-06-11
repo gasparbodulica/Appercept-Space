@@ -326,7 +326,7 @@ function GeneralTab() {
 // ─── Members Tab ──────────────────────────────────────────────────────────────
 
 function MembersTab() {
-  const { users, currentUserId, addMember, removeMember, updateUser } = useAppStore();
+  const { users, currentUserId, addMember, removeMember, updateUser, addPendingInvite, pendingInvites, removePendingInvite } = useAppStore();
   const [showInvite, setShowInvite] = useState(false);
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
@@ -343,6 +343,8 @@ function MembersTab() {
       initials,
       color: colors[users.length % colors.length],
     });
+    // Save as pending invite so the person is auto-approved on first login
+    addPendingInvite({ email: inviteEmail.trim(), name: inviteName.trim(), role: inviteRole });
     setInviteName('');
     setInviteEmail('');
     setInviteRole('member');
@@ -401,6 +403,37 @@ function MembersTab() {
           </div>
         ))}
       </SettingsCard>
+
+      {/* Pending invites — waiting for signup */}
+      {pendingInvites.length > 0 && (
+        <SettingsCard>
+          <CardLabel>Pending invites</CardLabel>
+          {pendingInvites.map((inv, i) => (
+            <div key={inv.email}>
+              {i > 0 && <Divider />}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--color-bg-active)', border: '1.5px dashed var(--color-border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                  {inv.name.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-primary)' }}>{inv.name}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{inv.email} · waiting for sign-up</div>
+                </div>
+                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'var(--color-bg-active)', color: 'var(--color-text-muted)' }}>{inv.role}</span>
+                <button
+                  onClick={() => removePendingInvite(inv.email)}
+                  style={{ padding: '4px 6px', borderRadius: 6, border: 'none', background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'none'; }}
+                  title="Cancel invite"
+                >
+                  <IconX size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </SettingsCard>
+      )}
 
       {/* Invite form */}
       {showInvite ? (

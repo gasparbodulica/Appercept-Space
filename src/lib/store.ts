@@ -77,6 +77,8 @@ interface AppState {
   addColumn: (databaseId: string, column: Omit<Column, 'id'>) => void;
   updateColumn: (databaseId: string, columnId: string, updates: Partial<Column>) => void;
   addColumnOption: (databaseId: string, columnId: string, label: string) => void;
+  updateColumnOption: (databaseId: string, columnId: string, optionId: string, updates: { label?: string; color?: string }) => void;
+  deleteColumnOption: (databaseId: string, columnId: string, optionId: string) => void;
   deleteColumn: (databaseId: string, columnId: string) => void;
   reorderColumns: (databaseId: string, fromIndex: number, toIndex: number) => void;
   resizeColumn: (databaseId: string, columnId: string, width: number) => void;
@@ -388,6 +390,32 @@ export const useAppStore = create<AppState>()(
             if (options.some((o) => o.label.toLowerCase() === label.toLowerCase())) return c;
             const newOpt = { id: generateId('opt'), label, color: palette[options.length % palette.length] };
             return { ...c, config: { ...c.config, options: [...options, newOpt] } };
+          });
+          return { databases: { ...s.databases, [databaseId]: { ...db, columns } } };
+        });
+      },
+
+      updateColumnOption: (databaseId, columnId, optionId, updates) => {
+        set((s) => {
+          const db = s.databases[databaseId];
+          if (!db) return s;
+          const columns = db.columns.map((c) => {
+            if (c.id !== columnId) return c;
+            const options = (c.config.options ?? []).map((o) => o.id === optionId ? { ...o, ...updates } : o);
+            return { ...c, config: { ...c.config, options } };
+          });
+          return { databases: { ...s.databases, [databaseId]: { ...db, columns } } };
+        });
+      },
+
+      deleteColumnOption: (databaseId, columnId, optionId) => {
+        set((s) => {
+          const db = s.databases[databaseId];
+          if (!db) return s;
+          const columns = db.columns.map((c) => {
+            if (c.id !== columnId) return c;
+            const options = (c.config.options ?? []).filter((o) => o.id !== optionId);
+            return { ...c, config: { ...c.config, options } };
           });
           return { databases: { ...s.databases, [databaseId]: { ...db, columns } } };
         });

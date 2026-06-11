@@ -39,7 +39,7 @@ const ALL_TYPES = ['All', 'PDF', 'PPTX', 'DOCX', 'XLSX', 'Image', 'Video', 'Arch
 
 // ── FilesBrowser ──────────────────────────────────────────────────────────────
 function FilesBrowser({ pageTitle, pageIcon, pageIconColor, pageId }: { pageTitle: string; pageIcon: string; pageIconColor?: string; pageId: string }) {
-  const { databases, addRow, updateCell, openRow } = useAppStore();
+  const { databases, addRow, updateCell, openRow, deleteRow } = useAppStore();
   const filesDb = Object.values(databases).find(d => d.page_id === pageId);
   const [activeType, setActiveType] = useState('All');
   const [search, setSearch] = useState('');
@@ -148,11 +148,18 @@ function FilesBrowser({ pageTitle, pageIcon, pageIconColor, pageId }: { pageTitl
                     borderRadius: 12, padding: '18px 16px', cursor: 'pointer',
                     display: 'flex', flexDirection: 'column', gap: 10,
                     transition: 'border-color 100ms, box-shadow 100ms, transform 100ms',
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.2)', position: 'relative',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = cfg.color; e.currentTarget.style.boxShadow = `0 6px 24px ${cfg.color}28`; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = cfg.color; e.currentTarget.style.boxShadow = `0 6px 24px ${cfg.color}28`; e.currentTarget.style.transform = 'translateY(-2px)'; (e.currentTarget.querySelector('.row-delete-btn') as HTMLElement | null)?.style.setProperty('opacity','1'); }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)'; e.currentTarget.style.transform = 'translateY(0)'; (e.currentTarget.querySelector('.row-delete-btn') as HTMLElement | null)?.style.setProperty('opacity','0'); }}
                 >
+                  {/* Delete button */}
+                  <button className="row-delete-btn" onClick={e => { e.stopPropagation(); filesDb && deleteRow(filesDb.id, f.id); }}
+                    style={{ position: 'absolute', top: 10, right: 10, width: 26, height: 26, borderRadius: 6, border: 'none', background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 120ms, color 120ms, background 120ms', zIndex: 2 }}
+                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'var(--color-red-bg)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'var(--color-bg-active)'; }}>
+                    <IconTrash size={13} />
+                  </button>
                   {/* File type icon */}
                   <div style={{ width: 52, height: 52, borderRadius: 12, background: cfg.bg, color: cfg.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {cfg.icon}
@@ -216,7 +223,7 @@ const SEASON_COLORS: Record<string, string> = {
 };
 
 function ClubCrowdDashboard({ pageId, pageTitle, pageIcon, pageIconColor }: { pageId: string; pageTitle: string; pageIcon: string; pageIconColor?: string }) {
-  const { databases, addRow, updateCell, openRow, updatePage } = useAppStore();
+  const { databases, addRow, updateCell, openRow, updatePage, deleteRow } = useAppStore();
   const isAdmin = useCurrentAccount()?.role === 'admin';
   const db = Object.values(databases).find(d => d.page_id === pageId);
   const [filter, setFilter] = useState('All');
@@ -437,13 +444,20 @@ function ClubCrowdDashboard({ pageId, pageTitle, pageIcon, pageIconColor }: { pa
                   style={{
                     background: 'var(--color-bg-elevated)',
                     border: '0.5px solid var(--color-border-default)',
-                    borderRadius: 14, overflow: 'hidden',
+                    borderRadius: 14, overflow: 'hidden', position: 'relative',
                     transition: 'border-color 120ms, box-shadow 120ms, transform 120ms',
                     boxShadow: '0 4px 18px rgba(0,0,0,0.28)',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#635bff'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(99,91,255,0.22)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.28)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#635bff'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(99,91,255,0.22)'; e.currentTarget.style.transform = 'translateY(-2px)'; (e.currentTarget.querySelector('.row-delete-btn') as HTMLElement | null)?.style.setProperty('opacity','1'); }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.28)'; e.currentTarget.style.transform = 'translateY(0)'; (e.currentTarget.querySelector('.row-delete-btn') as HTMLElement | null)?.style.setProperty('opacity','0'); }}
                 >
+                  {/* Delete button */}
+                  <button className="row-delete-btn" onClick={e => { e.stopPropagation(); db && deleteRow(db.id, v.id); }}
+                    style={{ position: 'absolute', top: 12, right: 12, zIndex: 3, width: 26, height: 26, borderRadius: 6, border: 'none', background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 120ms, color 120ms, background 120ms' }}
+                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'var(--color-red-bg)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'var(--color-bg-active)'; }}>
+                    <IconTrash size={13} />
+                  </button>
                   {/* Revenue strip — width reflects share of top venue */}
                   <div style={{ height: 5, background: 'rgba(99,91,255,0.15)' }}>
                     <div style={{ height: '100%', width: `${revPct}%`, background: 'linear-gradient(90deg, #635bff, #a78bfa)', transition: 'width 500ms' }} />

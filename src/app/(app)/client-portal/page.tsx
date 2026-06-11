@@ -195,6 +195,7 @@ export default function ClientPortalPage() {
   const account = useCurrentAccount();
   const isAdmin = account?.role === 'admin';
   const [editMenu, setEditMenu] = useState<string | null>(null); // company being edited
+  const [editMenuAnchor, setEditMenuAnchor] = useState<{ top: number; right: number } | null>(null);
   const [renameVal, setRenameVal] = useState('');
 
   const dbBySlug = (slug: string) =>
@@ -343,7 +344,7 @@ export default function ClientPortalPage() {
                 {/* Edit menu (admin) */}
                 {isAdmin && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); setRenameVal(c.name); setEditMenu(editMenu === c.name ? null : c.name); }}
+                    onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setRenameVal(c.name); if (editMenu === c.name) { setEditMenu(null); setEditMenuAnchor(null); } else { setEditMenu(c.name); setEditMenuAnchor({ top: r.bottom + 6, right: window.innerWidth - r.right }); } }}
                     title="Edit portal"
                     style={{ position: 'absolute', top: 12, right: 12, width: 26, height: 26, borderRadius: 7, border: 'none', background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text-primary)'; }}
@@ -352,10 +353,10 @@ export default function ClientPortalPage() {
                     <IconDots size={15} />
                   </button>
                 )}
-                {editMenu === c.name && (
+                {editMenu === c.name && editMenuAnchor && (
                   <>
-                    <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={(e) => { e.stopPropagation(); setEditMenu(null); }} />
-                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: 44, right: 12, width: 230, zIndex: 50, background: 'var(--color-bg-popover)', border: '0.5px solid var(--color-border-strong)', borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.55)', padding: 14 }}>
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 1400 }} onClick={(e) => { e.stopPropagation(); setEditMenu(null); setEditMenuAnchor(null); }} />
+                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'fixed', top: editMenuAnchor.top, right: editMenuAnchor.right, width: 230, zIndex: 1401, background: 'var(--color-bg-popover)', border: '0.5px solid var(--color-border-strong)', borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.55)', padding: 14 }}>
                       <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginBottom: 6 }}>Portal name</div>
                       <input
                         value={renameVal}

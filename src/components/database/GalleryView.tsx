@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Database, Row, Column, ViewConfig, CellValue } from '@/lib/types';
 import { useAppStore } from '@/lib/store';
 import { applyCellFilter, formatDate, getStatusConfig, getPriorityConfig, getTagConfig, isOverdue } from '@/lib/utils';
-import { IconPlus, IconCopy, IconCheck } from '@tabler/icons-react';
+import { IconPlus, IconCopy, IconCheck, IconTrash } from '@tabler/icons-react';
 
 interface GalleryViewProps {
   database: Database;
@@ -17,7 +17,7 @@ interface GalleryViewProps {
  * spreadsheet feel with a Notion-gallery look for every database.
  */
 export function GalleryView({ database, view }: GalleryViewProps) {
-  const { addRow, openRow } = useAppStore();
+  const { addRow, openRow, deleteRow } = useAppStore();
   const users = useAppStore(s => s.users);
 
   const cols = database.columns
@@ -81,10 +81,22 @@ export function GalleryView({ database, view }: GalleryViewProps) {
                 borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
                 boxShadow: '0 2px 12px rgba(0,0,0,0.22)',
                 transition: 'border-color 120ms, box-shadow 120ms, transform 120ms',
+                position: 'relative',
               }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = accent; e.currentTarget.style.boxShadow = `0 8px 28px ${accent}25`; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.22)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = accent; e.currentTarget.style.boxShadow = `0 8px 28px ${accent}25`; e.currentTarget.style.transform = 'translateY(-2px)'; (e.currentTarget.querySelector('.row-delete-btn') as HTMLElement | null)?.style.setProperty('opacity', '1'); }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.22)'; e.currentTarget.style.transform = 'translateY(0)'; (e.currentTarget.querySelector('.row-delete-btn') as HTMLElement | null)?.style.setProperty('opacity', '0'); }}
             >
+              {/* Delete button — top-right corner, visible on hover */}
+              <button
+                className="row-delete-btn"
+                onClick={e => { e.stopPropagation(); deleteRow(database.id, row.id); }}
+                title="Delete record"
+                style={{ position: 'absolute', top: 10, right: 10, zIndex: 2, width: 26, height: 26, borderRadius: 6, border: 'none', background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 120ms, color 120ms, background 120ms' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'var(--color-red-bg)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'var(--color-bg-active)'; }}
+              >
+                <IconTrash size={13} />
+              </button>
               {/* Accent strip */}
               <div style={{ height: 4, background: accent, opacity: 0.85 }} />
               <div style={{ padding: '14px 16px' }}>

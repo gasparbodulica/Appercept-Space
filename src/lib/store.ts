@@ -536,7 +536,10 @@ export const useAppStore = create<AppState>()(
       setAuthedAccount: (account, justSignedIn = false) => set((s) => {
         if (!account) return { sessionAccountId: null, justSignedIn: false };
         const others = s.accounts.filter((a) => a.id !== account.id);
-        return { accounts: [account, ...others], sessionAccountId: account.id, justSignedIn };
+        // Once the welcome screen is showing (justSignedIn=true) don't let a
+        // follow-up auth event (TOKEN_REFRESHED, INITIAL_SESSION, etc.) reset it —
+        // only clearJustSignedIn() may do that after the 3-second timer fires.
+        return { accounts: [account, ...others], sessionAccountId: account.id, justSignedIn: s.justSignedIn || justSignedIn };
       }),
       setAuthChecked: (v) => set({ authChecked: v }),
       clearJustSignedIn: () => set({ justSignedIn: false }),
@@ -1018,7 +1021,16 @@ export const useAppStore = create<AppState>()(
           ...current,
           ...p,
           // Workspace (incl. uploaded logo) is always preserved across loads.
-          workspace: p.workspace ?? current.workspace,
+          // If the store version bumped and wiped the persisted workspace, recover
+          // the logo from the version-independent localStorage key.
+          workspace: (() => {
+            const base = p.workspace ?? current.workspace;
+            if (!base.logo_url && typeof window !== 'undefined') {
+              const saved = localStorage.getItem('appercept-logo');
+              if (saved) return { ...base, logo_url: saved };
+            }
+            return base;
+          })(),
           databases: mergedDatabases,
           // Strip demo team members everywhere (workspace users + revenue roles),
           // by ID so re-adding people later is never blocked.

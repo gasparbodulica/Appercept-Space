@@ -35,9 +35,11 @@ export function SupabaseAuthSync() {
       if (active) setAuthChecked(true);
     });
 
-    // 2) React to future auth changes
+    // 2) React to future auth changes — treat SIGNED_IN and INITIAL_SESSION
+    //    (remembered session) as justSignedIn; TOKEN_REFRESHED etc. are silent.
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      void apply(session?.user?.id, event === 'SIGNED_IN');
+      const isEntry = event === 'SIGNED_IN' || event === 'INITIAL_SESSION';
+      void apply(session?.user?.id, isEntry && !!session?.user?.id);
     });
 
     return () => { active = false; sub.subscription.unsubscribe(); };

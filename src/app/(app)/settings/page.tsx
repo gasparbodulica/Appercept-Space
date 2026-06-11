@@ -263,7 +263,11 @@ function GeneralTab() {
     if (!file.type.startsWith('image/')) { setLogoError('Please choose an image file.'); return; }
     if (file.size > 2 * 1024 * 1024) { setLogoError('Image is too large — max 2 MB.'); return; }
     const reader = new FileReader();
-    reader.onload = () => updateWorkspace({ logo_url: reader.result as string });
+    reader.onload = () => {
+      const url = reader.result as string;
+      updateWorkspace({ logo_url: url });
+      localStorage.setItem('appercept-logo', url);
+    };
     reader.readAsDataURL(file);
   };
 
@@ -293,7 +297,7 @@ function GeneralTab() {
               <IconUpload size={13} /> Upload logo
             </button>
             {workspace.logo_url && (
-              <button onClick={() => updateWorkspace({ logo_url: undefined })} style={{ ...secondaryBtnStyle, color: 'var(--color-red)' }}>
+              <button onClick={() => { updateWorkspace({ logo_url: undefined }); localStorage.removeItem('appercept-logo'); }} style={{ ...secondaryBtnStyle, color: 'var(--color-red)' }}>
                 <IconTrash size={13} /> Remove logo
               </button>
             )}

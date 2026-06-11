@@ -47,16 +47,18 @@ export function WelcomeScreen({ account }: { account: Account }) {
       {/* Logo / brand mark */}
       <div style={{
         width: 72, height: 72, borderRadius: 18,
-        background: workspace.logo_url ? 'transparent' : 'var(--gradient-accent)',
+        background: 'transparent',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: '#fff', fontWeight: 800, fontSize: 32,
         boxShadow: '0 8px 30px rgba(0,210,255,0.4)',
         animation: 'welcomePop 600ms cubic-bezier(0.34,1.56,0.64,1)',
         overflow: 'hidden',
       }}>
-        {workspace.logo_url
-          ? <img src={workspace.logo_url} alt={workspace.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : (workspace.name?.charAt(0) || 'A')}
+        <img
+          src={workspace.logo_url || '/appercept-icon.svg'}
+          alt={workspace.name}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', padding: workspace.logo_url ? 0 : 10 }}
+        />
       </div>
 
       <div style={{ textAlign: 'center', maxWidth: 460 }}>

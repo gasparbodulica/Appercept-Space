@@ -18,7 +18,7 @@ type Kind = 'pl' | 'cashflow' | 'balance';
 export function FinancialStatementView({ kind, pageId, pageTitle, pageIcon, pageIconColor }: {
   kind: Kind; pageId: string; pageTitle: string; pageIcon: string; pageIconColor?: string;
 }) {
-  const { databases, pages, updatePage } = useAppStore();
+  const { databases, pages, updatePage, addRow, openRow, deleteRow } = useAppStore();
   const isAdmin = useCurrentAccount()?.role === 'admin';
   const db = Object.values(databases).find((d) => d.page_id === pageId);
   const [editAnchor, setEditAnchor] = useState<DOMRect | null>(null);
@@ -70,13 +70,65 @@ export function FinancialStatementView({ kind, pageId, pageTitle, pageIcon, page
 
         {/* Editable underlying records */}
         {db && (
-          <div>
-            <div style={{ maxWidth: 760, margin: '0 auto', padding: '8px 28px 0' }}>
+          <div style={{ padding: '0 28px 32px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '24px 0 16px', borderTop: '0.5px solid var(--color-border-subtle)', paddingTop: 20 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                {kind === 'pl' ? 'Cost records (edit to update the statement)' : kind === 'cashflow' ? 'Investing & financing movements' : 'Balance sheet items'}
+                {kind === 'pl' ? 'Cost records' : kind === 'cashflow' ? 'Investing & financing movements' : 'Balance sheet items'}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--color-text-muted)', opacity: 0.7 }}>
+                {kind === 'pl' ? '— edit to update the statement' : kind === 'cashflow' ? '— non-operating cash movements' : '— assets, liabilities & equity'}
               </div>
             </div>
-            <GalleryView database={db} view={galleryView} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+              {db.rows.map(row => {
+                const nameCol = db.columns.find(c => c.position === 0);
+                const otherCols = db.columns.filter(c => c.position !== 0 && !c.hidden).slice(0, 4);
+                const title = nameCol ? String(row.cells[nameCol.id] ?? 'Untitled') : 'Untitled';
+                return (
+                  <div
+                    key={row.id}
+                    onClick={() => openRow(row.id, db.id)}
+                    style={{ background: 'var(--color-bg-elevated)', border: '0.5px solid var(--color-border-default)', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', position: 'relative', transition: 'border-color 120ms, box-shadow 120ms, transform 120ms', boxShadow: '0 2px 10px rgba(0,0,0,0.18)' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-accent)'; e.currentTarget.style.boxShadow = '0 6px 22px rgba(0,210,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)'; (e.currentTarget.querySelector('.rec-del') as HTMLElement | null)?.style.setProperty('opacity','1'); }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.18)'; e.currentTarget.style.transform = 'translateY(0)'; (e.currentTarget.querySelector('.rec-del') as HTMLElement | null)?.style.setProperty('opacity','0'); }}
+                  >
+                    <button className="rec-del"
+                      onClick={e => { e.stopPropagation(); deleteRow(db.id, row.id); }}
+                      style={{ position: 'absolute', top: 10, right: 10, width: 24, height: 24, borderRadius: 5, border: 'none', background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 120ms, color 120ms' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-red)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                    </button>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 10, paddingRight: 20 }}>{title || 'Untitled'}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {otherCols.map(col => {
+                        const v = row.cells[col.id];
+                        if (v === null || v === undefined || v === '') return null;
+                        return (
+                          <div key={col.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 10, color: 'var(--color-text-muted)', minWidth: 80, flexShrink: 0 }}>{col.name}</span>
+                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {col.config?.prefix ?? ''}{String(v)}{col.config?.suffix ?? ''}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Add record card */}
+              <button
+                onClick={() => { const row = addRow(db.id); openRow(row.id, db.id); }}
+                style={{ background: 'none', border: '1.5px dashed var(--color-border-subtle)', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)', minHeight: 80, transition: 'border-color 120ms, color 120ms' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-accent-bright)'; e.currentTarget.style.color = 'var(--color-accent-bright)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-subtle)'; e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add record
+              </button>
+            </div>
           </div>
         )}
       </div>

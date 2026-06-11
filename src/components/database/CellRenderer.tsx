@@ -5,7 +5,7 @@ import { Column, Row, CellValue } from '@/lib/types';
 import { useAppStore } from '@/lib/store';
 import { formatDate, getStatusConfig, getPriorityConfig, getTagConfig, isOverdue } from '@/lib/utils';
 import { findCostsDb, companyMonthlyExpenses, findClientsDb, companyRevenue } from '@/lib/finance';
-import { IconSearch, IconX, IconPlus, IconEye, IconEyeOff } from '@tabler/icons-react';
+import { IconSearch, IconX, IconPlus, IconEye, IconEyeOff, IconCopy, IconCheck } from '@tabler/icons-react';
 
 interface CellProps {
   column: Column;
@@ -222,7 +222,17 @@ function DisplayCell({ column, row, databaseId, value, onClick }: { column: Colu
 
 function PasswordCell({ value, onClick }: { value: string; onClick: () => void }) {
   const [revealed, setRevealed] = useState(false);
+  const [copied, setCopied] = useState(false);
   const masked = '•'.repeat(Math.min(Math.max(value.length, 8), 14));
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
   return (
     <div style={{
       display: 'flex', alignItems: 'center', width: '100%', height: '100%',
@@ -241,20 +251,26 @@ function PasswordCell({ value, onClick }: { value: string; onClick: () => void }
         {value ? (revealed ? value : masked) : ''}
       </span>
       {value && (
-        <button
-          onClick={(e) => { e.stopPropagation(); setRevealed(r => !r); }}
-          title={revealed ? 'Hide password' : 'Show password'}
-          style={{
-            flexShrink: 0, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            borderRadius: 5, border: 'none', background: 'none', cursor: 'pointer',
-            color: revealed ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
-            transition: 'color 80ms',
-          }}
-          onMouseEnter={(e) => { if (!revealed) e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
-          onMouseLeave={(e) => { if (!revealed) e.currentTarget.style.color = 'var(--color-text-muted)'; }}
-        >
-          {revealed ? <IconEyeOff size={15} /> : <IconEye size={15} />}
-        </button>
+        <>
+          <button
+            onClick={handleCopy}
+            title="Copy password"
+            style={{ flexShrink: 0, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 5, border: 'none', background: 'none', cursor: 'pointer', color: copied ? 'var(--color-green)' : 'var(--color-text-muted)', transition: 'color 80ms' }}
+            onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+            onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+          >
+            {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setRevealed(r => !r); }}
+            title={revealed ? 'Hide password' : 'Show password'}
+            style={{ flexShrink: 0, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 5, border: 'none', background: 'none', cursor: 'pointer', color: revealed ? 'var(--color-accent-bright)' : 'var(--color-text-muted)', transition: 'color 80ms' }}
+            onMouseEnter={(e) => { if (!revealed) e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+            onMouseLeave={(e) => { if (!revealed) e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+          >
+            {revealed ? <IconEyeOff size={15} /> : <IconEye size={15} />}
+          </button>
+        </>
       )}
     </div>
   );

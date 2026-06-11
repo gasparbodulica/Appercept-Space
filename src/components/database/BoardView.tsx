@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useRef } from 'react';
 import { Database, Row, ViewConfig } from '@/lib/types';
 import { useAppStore } from '@/lib/store';
 import { getStatusConfig, getPriorityConfig, getTagConfig, formatDate, isOverdue, applyCellFilter } from '@/lib/utils';
@@ -15,6 +16,8 @@ interface BoardViewProps {
 
 export function BoardView({ database, view }: BoardViewProps) {
   const { addRow, updateCell, openRow } = useAppStore();
+  const dragRowId = useRef<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
 
   const statusCol = database.columns.find((c) => c.type === 'status');
   const nameCol = database.columns.find((c) => c.position === 0);
@@ -49,7 +52,20 @@ export function BoardView({ database, view }: BoardViewProps) {
         const rows = getRowsForStatus(status);
 
         return (
-          <div key={status} style={{ minWidth: 260, maxWidth: 280, flex: '0 0 260px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div
+            key={status}
+            style={{ minWidth: 260, maxWidth: 280, flex: '0 0 260px', display: 'flex', flexDirection: 'column', gap: 8, transition: 'background 150ms', borderRadius: 10, padding: 4, background: dragOverStatus === status ? 'var(--color-bg-hover)' : 'transparent' }}
+            onDragOver={(e) => { e.preventDefault(); setDragOverStatus(status); }}
+            onDragLeave={() => setDragOverStatus(null)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOverStatus(null);
+              if (dragRowId.current && statusCol) {
+                updateCell(database.id, dragRowId.current, statusCol.id, status);
+              }
+              dragRowId.current = null;
+            }}
+          >
             {/* Column header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px' }}>
               <span style={{ fontSize: 11, color: cfg.color }}>{cfg.icon}</span>
@@ -82,13 +98,16 @@ export function BoardView({ database, view }: BoardViewProps) {
 
                 return (
                   <div key={row.id}
+                    draggable
+                    onDragStart={() => { dragRowId.current = row.id; }}
+                    onDragEnd={() => { dragRowId.current = null; setDragOverStatus(null); }}
                     onClick={() => openRow(row.id, database.id)}
                     style={{
                       background: 'var(--color-bg-elevated)',
                       border: '0.5px solid var(--color-border-default)',
                       borderRadius: 8,
                       padding: '12px 14px',
-                      cursor: 'pointer',
+                      cursor: 'grab',
                       transition: 'all 150ms ease',
                     }}
                     onMouseEnter={(e) => {

@@ -8,11 +8,11 @@ import { Column, CellValue, Row } from '@/lib/types';
 import { CellRenderer } from '@/components/database/CellRenderer';
 import {
   IconX, IconDots, IconPlus, IconMessageCircle, IconHistory,
-  IconPaperclip, IconSend,
+  IconPaperclip, IconSend, IconTrash,
 } from '@tabler/icons-react';
 
 export function RowDetailPanel() {
-  const { openRowId, openDatabaseId, databases, closeRow, updateCell, comments, addComment, activities } = useAppStore();
+  const { openRowId, openDatabaseId, databases, closeRow, deleteRow, updateCell, comments, addComment, activities } = useAppStore();
   const [commentText, setCommentText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -71,6 +71,15 @@ export function RowDetailPanel() {
               }}
             />
           </div>
+          <button
+            onClick={() => { deleteRow(db.id, row.id); closeRow(); }}
+            title="Delete record"
+            style={{ padding: 4, borderRadius: 4, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-red-bg)'; e.currentTarget.style.color = 'var(--color-red)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+          >
+            <IconTrash size={15} />
+          </button>
           <button onClick={closeRow} style={{ padding: 4, borderRadius: 4, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}
             onMouseEnter={(e) => e.currentTarget.style.background = 'var(--color-bg-hover)'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'none'}

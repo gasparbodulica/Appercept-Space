@@ -15,8 +15,9 @@ import {
   IconFileText, IconTable, IconPhoto, IconVideo, IconFileZip, IconFile,
   IconPlus, IconExternalLink, IconMapPin, IconMusic, IconBrandStripe,
   IconCoinEuro, IconArmchair, IconReceipt, IconBolt, IconCircleCheck,
-  IconCalendar, IconChevronLeft, IconChevronRight, IconAlarm, IconTrash,
+  IconCalendar, IconChevronLeft, IconChevronRight, IconAlarm, IconTrash, IconColumns,
 } from '@tabler/icons-react';
+import { SchemaPanel } from '@/components/database/SchemaPanel';
 
 interface PageProps {
   params: { slug: string };
@@ -42,6 +43,7 @@ function FilesBrowser({ pageTitle, pageIcon, pageIconColor, pageId }: { pageTitl
   const filesDb = Object.values(databases).find(d => d.page_id === pageId);
   const [activeType, setActiveType] = useState('All');
   const [search, setSearch] = useState('');
+  const [schemaOpen, setSchemaOpen] = useState(false);
 
   const nameCol  = filesDb?.columns.find(c => c.position === 0);
   const typeCol  = filesDb?.columns.find(c => c.name === 'Type');
@@ -116,6 +118,12 @@ function FilesBrowser({ pageTitle, pageIcon, pageIconColor, pageId }: { pageTitl
         <button onClick={handleAdd} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 20, border: 'none', background: 'var(--gradient-accent)', color: '#fff', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
           <IconPlus size={12} /> Add file
         </button>
+        {filesDb && <button onClick={() => setSchemaOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 20, border: '0.5px solid var(--color-border-subtle)', background: 'none', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', cursor: 'pointer', flexShrink: 0 }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+          <IconColumns size={12} /> Properties
+        </button>}
+        {schemaOpen && filesDb && <SchemaPanel databaseId={filesDb.id} onClose={() => setSchemaOpen(false)} />}
       </div>
 
       {/* File grid */}
@@ -214,6 +222,7 @@ function ClubCrowdDashboard({ pageId, pageTitle, pageIcon, pageIconColor }: { pa
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [schemaOpen, setSchemaOpen] = useState(false);
   const [stripeNotice, setStripeNotice] = useState('');
   const [editAnchor, setEditAnchor] = useState<DOMRect | null>(null);
   const iconColor = pageIconColor ?? '#a78bfa';
@@ -335,10 +344,18 @@ function ClubCrowdDashboard({ pageId, pageTitle, pageIcon, pageIconColor }: { pa
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: 0, marginTop: 2 }}>{venues.length} venues · we earn a fee on every table reservation</p>
             </div>
           </div>
-          <button onClick={handleAdd} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #635bff, #a78bfa)', color: '#fff', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', boxShadow: '0 3px 14px rgba(99,91,255,0.4)' }}>
-            <IconPlus size={14} /> Add venue
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {db && <button onClick={() => setSchemaOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '0.5px solid var(--color-border-subtle)', background: 'none', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: 'var(--text-sm)', cursor: 'pointer' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+              <IconColumns size={14} /> Properties
+            </button>}
+            <button onClick={handleAdd} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #635bff, #a78bfa)', color: '#fff', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', boxShadow: '0 3px 14px rgba(99,91,255,0.4)' }}>
+              <IconPlus size={14} /> Add venue
+            </button>
+          </div>
         </div>
+        {schemaOpen && db && <SchemaPanel databaseId={db.id} onClose={() => setSchemaOpen(false)} />}
 
         {/* Revenue stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>

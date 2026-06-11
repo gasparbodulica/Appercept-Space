@@ -8,7 +8,8 @@ import { PageEditPopover } from '@/components/PageEditPopover';
 import { GalleryView } from '@/components/database/GalleryView';
 import { computePL, computeCashFlow, computeBalanceSheet } from '@/lib/statements';
 import { ViewConfig } from '@/lib/types';
-import { IconTrendingUp, IconTrendingDown, IconCircleCheck, IconAlertTriangle } from '@tabler/icons-react';
+import { IconTrendingUp, IconTrendingDown, IconCircleCheck, IconAlertTriangle, IconColumns } from '@tabler/icons-react';
+import { SchemaPanel } from '@/components/database/SchemaPanel';
 
 function fmt(n: number) { return `€${Math.round(n).toLocaleString('de-DE')}`; }
 
@@ -21,6 +22,7 @@ export function FinancialStatementView({ kind, pageId, pageTitle, pageIcon, page
   const isAdmin = useCurrentAccount()?.role === 'admin';
   const db = Object.values(databases).find((d) => d.page_id === pageId);
   const [editAnchor, setEditAnchor] = useState<DOMRect | null>(null);
+  const [schemaOpen, setSchemaOpen] = useState(false);
   const iconColor = pageIconColor ?? '#f5c518';
 
   const galleryView: ViewConfig = { id: `${db?.id}-rows`, database_id: db?.id ?? '', name: 'Records', type: 'gallery', icon: 'IconLayoutGrid', filters: [], sorts: [], hidden_cols: [], is_default: true };
@@ -46,6 +48,14 @@ export function FinancialStatementView({ kind, pageId, pageTitle, pageIcon, page
             onClose={() => setEditAnchor(null)} />
         )}
         <h1 style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>{pageTitle}</h1>
+        <div style={{ flex: 1 }} />
+        {db && <button onClick={() => setSchemaOpen(true)} title="Manage properties"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '0.5px solid var(--color-border-subtle)', background: 'none', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', cursor: 'pointer' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+          <IconColumns size={13} /> Properties
+        </button>}
+        {schemaOpen && db && <SchemaPanel databaseId={db.id} onClose={() => setSchemaOpen(false)} />}
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', background: 'var(--color-bg-base)' }}>

@@ -261,13 +261,14 @@ export function computeProjectRevenue(projectsDb: Database | undefined): { upfro
   for (const row of projectsDb.rows) {
     const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
     const isDone = status === 'Done' || status === 'Completed';
-    // Upfront: count in the month it landed — Start date, else the row's created month.
+    // Upfront: counts in THIS month for any active project, unless a Start date is
+    // explicitly set to a different month (then it belongs to that month, not now).
     if (upfrontCol && !isDone) {
       const upfront = Number(row.cells[upfrontCol.id]) || 0;
       if (upfront > 0) {
         const startDate = startCol ? String(row.cells[startCol.id] ?? '') : '';
-        const upfrontMonth = startDate ? ym(startDate) : (row.created_at ? ym(row.created_at) : curYM);
-        if (upfrontMonth === curYM) upfrontThisMonth += upfront;
+        const startInCurrentMonth = !startDate || ym(startDate) === curYM;
+        if (startInCurrentMonth) upfrontThisMonth += upfront;
       }
     }
     // Monthly: count all active projects

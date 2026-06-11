@@ -29,9 +29,14 @@ export function WelcomeScreen({ account }: { account: Account }) {
   const firstName = account.name.trim().split(/\s+/)[0] || 'there';
 
   useEffect(() => {
+    // Share first name with appercept.net via a cross-subdomain cookie so the
+    // landing page overlay can greet the user by name on their next visit.
+    const maxAge = 365 * 24 * 3600;
+    document.cookie = `appercept_fn=${encodeURIComponent(firstName)}; domain=.appercept.net; max-age=${maxAge}; path=/; SameSite=Lax`;
+
     const t = setTimeout(() => clearJustSignedIn(), 3000);
     return () => clearTimeout(t);
-  }, [clearJustSignedIn]);
+  }, [clearJustSignedIn, firstName]);
 
   return (
     <div style={{
@@ -63,7 +68,7 @@ export function WelcomeScreen({ account }: { account: Account }) {
 
       <div style={{ textAlign: 'center', maxWidth: 460 }}>
         <h1 style={{ fontSize: 32, fontWeight: 800, color: '#fff', marginBottom: 10, letterSpacing: '-0.01em' }}>
-          Welcome back, {firstName}
+          Welcome, {firstName}
         </h1>
         <p style={{ fontSize: 'var(--text-md)', color: 'rgba(232,240,248,0.78)', lineHeight: 1.5, fontStyle: 'italic' }}>
           &ldquo;{quote}&rdquo;

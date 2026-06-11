@@ -1191,3 +1191,7 @@ export const useUnreadPortalCount = () =>
     }
     return total;
   });
+
+/** Count of accounts waiting for admin approval. */
+export const usePendingApprovalCount = () =>
+  useAppStore((s) => s.accounts.filter((a) => !a.approved).length);

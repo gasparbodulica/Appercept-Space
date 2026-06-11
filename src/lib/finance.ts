@@ -174,7 +174,7 @@ export function companyRevenue(clientsDb: Database | undefined, companyName: str
   // Sum monthly recurring from Projects DB (pc-monthly column)
   let projectMonthly = 0;
   if (projectsDb) {
-    const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly');
+    const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly' || c.name === 'Monthly (€)' || c.name === 'Monthly');
     const clientCol  = projectsDb.columns.find(c => c.name === 'Client');
     const statusCol  = projectsDb.columns.find(c => c.type === 'status');
     if (monthlyCol && clientCol) {
@@ -252,9 +252,9 @@ export function computeClientRevenue(clientsDb: Database | undefined, projectsDb
  */
 export function computeProjectRevenue(projectsDb: Database | undefined): { upfrontThisMonth: number; monthlyRecurring: number } {
   if (!projectsDb) return { upfrontThisMonth: 0, monthlyRecurring: 0 };
-  const upfrontCol = projectsDb.columns.find(c => c.id === 'pc-upfront');
-  const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly');
-  const startCol   = projectsDb.columns.find(c => c.name === 'Start date' || c.id === 'pc-start');
+  const upfrontCol = projectsDb.columns.find(c => c.id === 'pc-upfront' || c.name === 'Upfront (€)' || c.name === 'Upfront');
+  const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly' || c.name === 'Monthly (€)' || c.name === 'Monthly');
+  const startCol   = projectsDb.columns.find(c => c.id === 'pc-start' || c.name === 'Start date' || c.name === 'Start');
   const statusCol  = projectsDb.columns.find(c => c.type === 'status');
   const curYM = nowYM();
   let upfrontThisMonth = 0, monthlyRecurring = 0;

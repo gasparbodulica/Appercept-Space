@@ -526,15 +526,46 @@ function AccessTab() {
 
   // Load all real Supabase profiles so self-sign-ups appear here for approval.
   const [loadingProfiles, setLoadingProfiles] = useState(false);
-  const [loadError, setLoadError] = useState('');
+  const [rlsWarning, setRlsWarning] = useState(false); // true when we can only see our own profile
+  const [sqlCopied, setSqlCopied] = useState(false);
+  const [showSql, setShowSql] = useState(false);
+
+  const rlsSql = `-- Run once in Supabase → SQL Editor
+-- Lets any signed-in user READ all profiles (so the admin approval list loads)
+drop policy if exists "read all profiles" on public.profiles;
+create policy "read all profiles"
+  on public.profiles for select
+  to authenticated
+  using (true);
+
+-- Lets admins UPDATE any profile (approve / role / company)
+drop policy if exists "admins update profiles" on public.profiles;
+create policy "admins update profiles"
+  on public.profiles for update
+  to authenticated
+  using ( (select role from public.profiles p where p.id = auth.uid()) = 'admin' )
+  with check ( true );`;
+
+  const copySql = () => {
+    navigator.clipboard.writeText(rlsSql).then(() => {
+      setSqlCopied(true);
+      setTimeout(() => setSqlCopied(false), 2500);
+    });
+  };
+
   const refreshProfiles = useCallback(async () => {
     if (!isSupabaseConfigured) return;
-    setLoadingProfiles(true); setLoadError('');
+    setLoadingProfiles(true);
     const profs = await fetchAllProfiles();
-    if (profs.length > 0) mergeSupabaseAccounts(profs);
-    else setLoadError('No profiles returned — check the profiles RLS policy in Supabase (admins must be able to read all rows).');
+    if (profs.length > 0) {
+      mergeSupabaseAccounts(profs);
+      // If we only got 1 profile (just ourselves), RLS likely not set up yet
+      setRlsWarning(profs.length === 1 && profs[0]?.id === me?.id);
+    } else {
+      setRlsWarning(true);
+    }
     setLoadingProfiles(false);
-  }, [mergeSupabaseAccounts]);
+  }, [mergeSupabaseAccounts, me?.id]);
   useEffect(() => { void refreshProfiles(); }, [refreshProfiles]);
 
   // Approve/revoke handlers that also persist to Supabase when configured.
@@ -586,6 +617,51 @@ function AccessTab() {
     <div>
       <PageHeader title="Access control" subtitle="Manage who can enter this workspace. Approve sign-up requests or create accounts directly." />
 
+      {/* ── Supabase RLS setup (required to see new sign-ups) ── */}
+      {isSupabaseConfigured && (
+        <div style={{
+          marginBottom: 28, borderRadius: 10,
+          border: `1px solid ${rlsWarning ? '#f59e0b' : 'var(--color-border-subtle)'}`,
+          background: rlsWarning ? 'rgba(245,158,11,0.06)' : 'var(--color-bg-elevated)',
+          overflow: 'hidden',
+        }}>
+          <button
+            onClick={() => setShowSql(s => !s)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer',
+              color: rlsWarning ? '#f59e0b' : 'var(--color-text-secondary)',
+            }}
+          >
+            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+              {rlsWarning ? '⚠ Supabase setup required — new sign-ups invisible until you run this SQL' : '✓ Supabase RLS setup (click to view SQL)'}
+            </span>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{showSql ? '▲ hide' : '▼ show'}</span>
+          </button>
+          {showSql && (
+            <div style={{ padding: '0 16px 16px' }}>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+                Open <strong>Supabase → SQL Editor</strong>, paste and run this once. Then click Refresh above.
+              </p>
+              <pre style={{
+                fontSize: 11, lineHeight: 1.6, padding: '12px 14px', borderRadius: 8,
+                background: 'var(--color-bg-base)', border: '0.5px solid var(--color-border-default)',
+                overflowX: 'auto', color: 'var(--color-text-secondary)', margin: 0, whiteSpace: 'pre-wrap',
+              }}>{rlsSql}</pre>
+              <button
+                onClick={copySql}
+                style={{
+                  marginTop: 10, padding: '6px 14px', borderRadius: 7, border: '0.5px solid var(--color-border-default)',
+                  background: sqlCopied ? 'var(--color-green)' : 'var(--color-bg-active)',
+                  color: sqlCopied ? '#fff' : 'var(--color-text-primary)',
+                  fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer',
+                }}
+              >{sqlCopied ? '✓ Copied!' : 'Copy SQL'}</button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Pending requests ── */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -602,7 +678,11 @@ function AccessTab() {
           )}
         </div>
 
-        {loadError && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-amber)', marginBottom: 8, lineHeight: 1.5 }}>{loadError}</div>}
+        {rlsWarning && (
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-amber)', marginBottom: 8, lineHeight: 1.5 }}>
+            Supabase can only see your own profile — new sign-ups (like Karlo) won't appear until you run the RLS policy below.
+          </div>
+        )}
 
         <SettingsCard>
           {pending.length === 0 ? (

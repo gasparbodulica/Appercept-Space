@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAppStore, useUnreadNotifications, useUnreadPortalCount } from '@/lib/store';
+import { useAppStore, useUnreadNotifications, useUnreadPortalCount, usePendingApprovalCount } from '@/lib/store';
 import { formatRelativeTime } from '@/lib/utils';
-import { IconShare, IconStar, IconStarFilled, IconDots, IconBell, IconBellFilled, IconPlus, IconLayoutSidebar, IconLink, IconDownload, IconBriefcase } from '@tabler/icons-react';
+import { IconShare, IconStar, IconStarFilled, IconDots, IconBell, IconBellFilled, IconPlus, IconLayoutSidebar, IconLink, IconDownload, IconBriefcase, IconUserCheck, IconMessageCircle } from '@tabler/icons-react';
 
 interface TopbarProps {
   breadcrumb?: string[];
@@ -21,6 +21,8 @@ export function Topbar({ breadcrumb = [], pageTitle, extra }: TopbarProps) {
   const pathname = usePathname();
   const unread = useUnreadNotifications();
   const unreadPortal = useUnreadPortalCount();
+  const pendingApprovals = usePendingApprovalCount();
+  const totalBadge = unread + unreadPortal + pendingApprovals;
   const [notifOpen, setNotifOpen] = useState(false);
   const [starred, setStarred] = useState(false);
   const [dotsOpen, setDotsOpen] = useState(false);
@@ -165,12 +167,16 @@ export function Topbar({ breadcrumb = [], pageTitle, extra }: TopbarProps) {
             style={{ padding: '4px 6px', position: 'relative' }}
             aria-label="Notifications"
           >
-            {unread > 0 ? <IconBellFilled size={16} style={{ color: 'var(--color-accent)' }} /> : <IconBell size={16} />}
-            {unread > 0 && (
+            {totalBadge > 0 ? <IconBellFilled size={16} style={{ color: 'var(--color-accent)' }} /> : <IconBell size={16} />}
+            {totalBadge > 0 && (
               <span style={{
-                position: 'absolute', top: 2, right: 2, width: 8, height: 8,
-                borderRadius: '50%', background: 'var(--color-red)', border: '1.5px solid var(--color-bg-base)',
-              }} />
+                position: 'absolute', top: 0, right: 0,
+                minWidth: 14, height: 14, borderRadius: 7,
+                background: 'var(--color-red)', color: '#fff',
+                fontSize: 9, fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: '1.5px solid var(--color-bg-base)', padding: '0 3px',
+              }}>{totalBadge > 9 ? '9+' : totalBadge}</span>
             )}
           </button>
 
@@ -178,7 +184,7 @@ export function Topbar({ breadcrumb = [], pageTitle, extra }: TopbarProps) {
             <>
               <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setNotifOpen(false)} />
               <div style={{
-                position: 'absolute', right: 0, top: 'calc(100% + 8px)', width: 320, zIndex: 50,
+                position: 'absolute', right: 0, top: 'calc(100% + 8px)', width: 340, zIndex: 50,
                 background: 'var(--color-bg-surface)', border: '0.5px solid var(--color-border-default)',
                 borderRadius: 'var(--card-radius)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
                 overflow: 'hidden',
@@ -187,8 +193,59 @@ export function Topbar({ breadcrumb = [], pageTitle, extra }: TopbarProps) {
                   <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)' }}>Notifications</span>
                   <button onClick={markAllNotificationsRead} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-accent)', background: 'none', border: 'none', cursor: 'pointer' }}>Mark all read</button>
                 </div>
-                <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-                  {notifications.length === 0 && (
+                <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+                  {/* Pending account approvals */}
+                  {pendingApprovals > 0 && (
+                    <div
+                      onClick={() => { router.push('/settings?tab=access'); setNotifOpen(false); }}
+                      style={{
+                        padding: '12px 16px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start',
+                        background: 'rgba(251,146,60,0.08)', borderBottom: '0.5px solid var(--color-border-subtle)',
+                        transition: 'background 100ms ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(251,146,60,0.16)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(251,146,60,0.08)')}
+                    >
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#fb923c', flexShrink: 0, marginTop: 5 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                          <IconUserCheck size={13} style={{ color: '#fb923c' }} />
+                          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                            {pendingApprovals} account{pendingApprovals !== 1 ? 's' : ''} pending approval
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>New sign-ups waiting for your approval → Settings › Access</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Unread portal messages */}
+                  {unreadPortal > 0 && (
+                    <div
+                      onClick={() => { router.push('/client-portal'); setNotifOpen(false); }}
+                      style={{
+                        padding: '12px 16px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start',
+                        background: 'rgba(255,59,59,0.07)', borderBottom: '0.5px solid var(--color-border-subtle)',
+                        transition: 'background 100ms ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,59,59,0.14)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,59,59,0.07)')}
+                    >
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-red)', flexShrink: 0, marginTop: 5 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                          <IconMessageCircle size={13} style={{ color: 'var(--color-red)' }} />
+                          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                            {unreadPortal} unread portal message{unreadPortal !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Client portal messages awaiting reply → Client Portal</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Regular notifications */}
+                  {notifications.length === 0 && pendingApprovals === 0 && unreadPortal === 0 && (
                     <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>All caught up!</div>
                   )}
                   {notifications.map((n) => (

@@ -367,6 +367,16 @@ export function Sidebar() {
         )}
 
 
+        {/* Back to appercept.net */}
+        <a
+          href="https://appercept.net"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, margin: '6px 8px 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textDecoration: 'none', opacity: 0.7, transition: 'opacity 150ms' }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; }}
+        >
+          ← appercept.net
+        </a>
+
         {/* Quick actions */}
         <div style={{ display: 'flex', gap: 4, padding: '6px 0 0' }}>
           <button

@@ -252,7 +252,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Appercept finances — revenue minus costs = monthly profit */}
-        <ApperceptFinanceBox f={finance} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} />
+        <ApperceptFinanceBox f={finance} upfront={upfrontThisMonth} recurring={monthlyRecurring} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} />
 
         {/* Financial Overview — synthesised from Balance Sheet + Cash Flow + real costs/revenue */}
         {hasFinancials && (
@@ -669,19 +669,20 @@ function ClubCrowdSnapshot({ yearly, monthly, stages, connected, total, onOpen }
   );
 }
 
-function ApperceptFinanceBox({ f, clientCount, consultingCount, onOpenCosts }: { f: CompanyFinance; clientCount: number; consultingCount: number; onOpenCosts: () => void }) {
+function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCount, onOpenCosts }: { f: CompanyFinance; upfront: number; recurring: number; clientCount: number; consultingCount: number; onOpenCosts: () => void }) {
   const profitPositive = f.profit >= 0;
   const profitColor = profitPositive ? 'var(--color-green)' : 'var(--color-red)';
 
-  // 4-bar chart: Retainers / Consulting / Costs / Profit
-  const scaleMax = Math.max(1, f.revenue, f.consultingRevenue, f.clubRevenue, f.expenses, Math.abs(f.profit));
+  // Bar chart: One-time / Recurring / Consulting / Clubs / Costs / Profit
+  const scaleMax = Math.max(1, upfront, recurring, f.consultingRevenue, f.clubRevenue, f.expenses, Math.abs(f.profit));
   const bars = [
-    { label: 'Retainers', value: f.revenue, color: 'var(--color-teal)', solid: 'rgba(0,210,255,0.55)' },
+    { label: 'One-time', value: upfront, color: 'var(--color-accent-bright)', solid: 'rgba(0,210,255,0.7)' },
+    { label: 'Recurring', value: recurring, color: 'var(--color-teal)', solid: 'rgba(45,212,191,0.55)' },
     { label: 'Consulting', value: f.consultingRevenue, color: '#a78bfa', solid: 'rgba(167,139,250,0.55)' },
     { label: 'Clubs', value: f.clubRevenue, color: '#635bff', solid: 'rgba(99,91,255,0.55)' },
     { label: 'Costs', value: f.expenses, color: 'var(--color-red)', solid: 'rgba(255,79,106,0.55)' },
     { label: 'Profit', value: f.profit, color: profitColor, gradient: true },
-  ];
+  ].filter(b => b.label === 'Profit' || b.label === 'Costs' || b.value > 0);
 
   return (
     <div style={{
@@ -698,7 +699,7 @@ function ApperceptFinanceBox({ f, clientCount, consultingCount, onOpenCosts }: {
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Appercept · {f.monthLabel} finances</div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Retainers + consulting + club fees − {f.expenseCount} costs, calculated automatically</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>One-time payments this month + recurring + consulting + clubs − {f.expenseCount} costs</div>
         </div>
         <button onClick={onOpenCosts}
           style={{ padding: '6px 12px', borderRadius: 7, border: '0.5px solid var(--color-border-strong)', background: 'var(--color-bg-active)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer' }}
@@ -710,11 +711,12 @@ function ApperceptFinanceBox({ f, clientCount, consultingCount, onOpenCosts }: {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 28, alignItems: 'stretch' }}>
         {/* Left: figures */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center' }}>
-          <FinanceRow label="Client retainers" value={fmt(f.revenue)} color="var(--color-teal)" sub={`${clientCount} paying client${clientCount !== 1 ? 's' : ''}`} />
+          <FinanceRow label="One-time payments" value={fmt(upfront)} color="var(--color-accent-bright)" sub={`${f.monthLabel} project upfronts (counted once)`} />
+          <FinanceRow label="Recurring (projects)" value={fmt(recurring)} color="var(--color-teal)" sub={`${clientCount} active client${clientCount !== 1 ? 's' : ''} · every month`} />
           <FinanceRow label="Consulting fees" value={fmt(f.consultingRevenue)} color="#a78bfa" sub={`${consultingCount} engagement${consultingCount !== 1 ? 's' : ''} this month`} />
           <FinanceRow label="Club fees (ClubCrowd)" value={fmt(f.clubRevenue)} color="#7c75ff" sub="season-adjusted monthly avg" />
           <div style={{ height: '0.5px', background: 'var(--color-border-subtle)', margin: '2px 0' }} />
-          <FinanceRow label="Total revenue" value={fmt(f.totalRevenue)} color="var(--color-accent-bright)" sub="retainers + consulting + clubs" />
+          <FinanceRow label="Total revenue" value={fmt(f.totalRevenue)} color="var(--color-accent-bright)" sub="one-time + recurring + consulting + clubs" />
           <FinanceRow label="Costs taken out" value={`− ${fmt(f.expenses)}`} color="var(--color-red)" sub={`${f.expenseCount} cost${f.expenseCount !== 1 ? 's' : ''} this month`} />
           <div style={{ height: '0.5px', background: 'var(--color-border-default)' }} />
           <div>

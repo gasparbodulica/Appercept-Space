@@ -255,25 +255,35 @@ export function computeProjectRevenue(projectsDb: Database | undefined): { upfro
   const upfrontCol = projectsDb.columns.find(c => c.id === 'pc-upfront' || c.name === 'Upfront (€)' || c.name === 'Upfront');
   const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly' || c.name === 'Monthly (€)' || c.name === 'Monthly');
   const startCol   = projectsDb.columns.find(c => c.id === 'pc-start' || c.name === 'Start date' || c.name === 'Start');
+  const endCol     = projectsDb.columns.find(c => c.id === 'pc-end'   || c.name === 'End date'   || c.name === 'End');
   const statusCol  = projectsDb.columns.find(c => c.type === 'status');
   const curYM = nowYM();
   let upfrontThisMonth = 0, monthlyRecurring = 0;
   for (const row of projectsDb.rows) {
     const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
     const isDone = status === 'Done' || status === 'Completed';
-    // Upfront: counts in THIS month for any active project, unless a Start date is
-    // explicitly set to a different month (then it belongs to that month, not now).
-    if (upfrontCol && !isDone) {
+    if (isDone) continue;
+
+    const startDate = startCol ? String(row.cells[startCol.id] ?? '') : '';
+    const endDate   = endCol   ? String(row.cells[endCol.id]   ?? '') : '';
+
+    // Upfront: counts in THIS month unless a Start date is set to a different month.
+    if (upfrontCol) {
       const upfront = Number(row.cells[upfrontCol.id]) || 0;
       if (upfront > 0) {
-        const startDate = startCol ? String(row.cells[startCol.id] ?? '') : '';
         const startInCurrentMonth = !startDate || ym(startDate) === curYM;
         if (startInCurrentMonth) upfrontThisMonth += upfront;
       }
     }
-    // Monthly: count all active projects
-    if (monthlyCol && !isDone) {
-      monthlyRecurring += Number(row.cells[monthlyCol.id]) || 0;
+
+    // Monthly: counts every month from Start (or always if none) UNTIL End date passes.
+    if (monthlyCol) {
+      const monthly = Number(row.cells[monthlyCol.id]) || 0;
+      if (monthly > 0) {
+        const started  = !startDate || ym(startDate) <= curYM;
+        const notEnded = !endDate   || ym(endDate)   >= curYM;
+        if (started && notEnded) monthlyRecurring += monthly;
+      }
     }
   }
   return { upfrontThisMonth: Math.round(upfrontThisMonth), monthlyRecurring: Math.round(monthlyRecurring) };

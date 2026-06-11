@@ -327,11 +327,31 @@ function GeneralTab() {
 // ─── Members Tab ──────────────────────────────────────────────────────────────
 
 function MembersTab() {
-  const { users, currentUserId, addMember, removeMember, updateUser, addPendingInvite, pendingInvites, removePendingInvite } = useAppStore();
+  const { users, currentUserId, addMember, removeMember, updateUser, addPendingInvite, pendingInvites, removePendingInvite, generateInviteLink, revokeInviteLink, inviteLinks } = useAppStore();
   const [showInvite, setShowInvite] = useState(false);
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'member' | 'viewer'>('member');
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const activeLinks = inviteLinks.filter(l => new Date(l.expiresAt) > new Date());
+
+  const handleGenerateLink = () => {
+    const token = generateInviteLink();
+    const url = `${window.location.origin}/?invite=${token}&signup=1`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 3000);
+    });
+  };
+
+  const copyLink = (token: string) => {
+    const url = `${window.location.origin}/?invite=${token}&signup=1`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 3000);
+    });
+  };
 
   const handleInvite = () => {
     if (!inviteName.trim() || !inviteEmail.trim()) return;
@@ -436,6 +456,45 @@ function MembersTab() {
         </SettingsCard>
       )}
 
+      {/* ── Invite link ── */}
+      <div style={{ marginTop: 20, marginBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <CardLabel style={{ marginBottom: 0 }}>Invite link</CardLabel>
+          <button
+            onClick={handleGenerateLink}
+            style={{ ...primaryBtnStyle, padding: '5px 12px', fontSize: 'var(--text-xs)' }}
+          >
+            <IconPlus size={13} /> {linkCopied ? '✓ Link copied!' : 'Generate & copy'}
+          </button>
+        </div>
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginBottom: activeLinks.length > 0 ? 10 : 0 }}>
+          Send this link to anyone you want to invite. They sign up and are automatically approved as a member — no manual approval needed.
+        </div>
+        {activeLinks.length > 0 && (
+          <SettingsCard>
+            {activeLinks.map((link, i) => {
+              const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/?invite=${link.token}&signup=1`;
+              const expiresIn = Math.ceil((new Date(link.expiresAt).getTime() - Date.now()) / (1000 * 3600 * 24));
+              return (
+                <div key={link.token}>
+                  {i > 0 && <Divider />}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</div>
+                      <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 3 }}>
+                        Expires in {expiresIn}d · Used {link.usedCount} time{link.usedCount !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                    <button onClick={() => copyLink(link.token)} style={{ ...ghostSmallBtn, fontSize: 10 }}>Copy</button>
+                    <button onClick={() => revokeInviteLink(link.token)} title="Revoke" style={iconDangerBtn}><IconTrash size={13} /></button>
+                  </div>
+                </div>
+              );
+            })}
+          </SettingsCard>
+        )}
+      </div>
+
       {/* Invite form */}
       {showInvite ? (
         <SettingsCard>
@@ -531,19 +590,28 @@ function AccessTab() {
   const [showSql, setShowSql] = useState(false);
 
   const rlsSql = `-- Run once in Supabase → SQL Editor
--- Lets any signed-in user READ all profiles (so the admin approval list loads)
+
+-- 1. Let any signed-in user READ all profiles (admin approval list + invite flow)
 drop policy if exists "read all profiles" on public.profiles;
 create policy "read all profiles"
   on public.profiles for select
   to authenticated
   using (true);
 
--- Lets admins UPDATE any profile (approve / role / company)
+-- 2. Let admins UPDATE any profile (approve / role / company)
 drop policy if exists "admins update profiles" on public.profiles;
 create policy "admins update profiles"
   on public.profiles for update
   to authenticated
   using ( (select role from public.profiles p where p.id = auth.uid()) = 'admin' )
+  with check ( true );
+
+-- 3. Let users update their OWN profile (needed for invite-link auto-approval)
+drop policy if exists "users update own profile" on public.profiles;
+create policy "users update own profile"
+  on public.profiles for update
+  to authenticated
+  using ( auth.uid() = id )
   with check ( true );`;
 
   const copySql = () => {

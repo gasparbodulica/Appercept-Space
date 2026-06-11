@@ -11,10 +11,14 @@ export function AuthScreen() {
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin');
   const [resetStep, setResetStep] = useState<'request' | 'verify'>('request');
 
+  const [inviteToken, setInviteToken] = useState('');
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('signup') === '1') setMode('signup');
+      const tok = params.get('invite');
+      if (tok) setInviteToken(tok);
     }
   }, []);
 
@@ -80,12 +84,14 @@ export function AuthScreen() {
       } else {
         const res = await signUpSupabase(name, email, password);
         if (!res.ok) { setError(res.error ?? 'Could not create account.'); return; }
+        // Store invite token so SupabaseAuthSync can auto-approve this account
+        if (inviteToken) localStorage.setItem('appercept_invite', inviteToken);
         if (res.needsConfirm) {
           setNotice('Account created. Check your email to confirm, then sign in.');
           setMode('signin');
         }
-        // If confirmation is off, the session is live and the app loads automatically
-        // (a new account waits on the "approval" screen until an admin approves it).
+        // If confirmation is off, the session is live and the app loads automatically.
+        // With an invite token the account will be auto-approved by SupabaseAuthSync.
       }
     } catch {
       setError('Could not reach the authentication service.');
@@ -175,12 +181,15 @@ export function AuthScreen() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {mode === 'signup' && (
           <>
-            {inviteMatch && (
+            {(inviteToken || inviteMatch) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', borderRadius: 7, background: 'rgba(46,232,154,0.1)', border: '0.5px solid rgba(46,232,154,0.3)', fontSize: 'var(--text-xs)', color: 'var(--color-green)' }}>
-                <IconShieldCheck size={13} /> You&apos;ve been pre-registered as <b style={{ marginLeft: 3 }}>{inviteMatch.role}</b>
+                <IconShieldCheck size={13} />
+                {inviteToken
+                  ? <>You&apos;ve been invited — your account will be <b style={{ marginLeft: 3 }}>automatically approved</b> as member.</>
+                  : <>You&apos;ve been pre-registered as <b style={{ marginLeft: 3 }}>{inviteMatch!.role}</b></>}
               </div>
             )}
-            <Field icon={<IconUser size={15} />} placeholder="Full name" value={name} onChange={inviteMatch ? () => {} : setName} onEnter={submit} />
+            <Field icon={<IconUser size={15} />} placeholder="Full name" value={name} onChange={(inviteMatch && !inviteToken) ? () => {} : setName} onEnter={submit} />
           </>
         )}
 

@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useAppStore } from '@/lib/store';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { fetchProfile } from '@/lib/auth';
+import { fetchProfile, updateProfileApproval } from '@/lib/auth';
 
 /**
  * Bridges the live Supabase auth session into the app's account model.
@@ -24,13 +24,24 @@ export function SupabaseAuthSync() {
       if (!userId) { setAuthedAccount(null); return; }
       const acc = await fetchProfile(userId);
       if (active && acc) {
-        // Check if admin pre-registered this email — if so, auto-approve and use the admin's name
-        const { pendingInvites, removePendingInvite } = useAppStore.getState();
+        // Check if admin pre-registered this email — auto-approve and use the admin's name
+        const { pendingInvites, removePendingInvite, consumeInviteLink } = useAppStore.getState();
         const invite = pendingInvites.find(i => i.email.toLowerCase() === acc.email.toLowerCase());
-        const resolved = invite
-          ? { ...acc, name: invite.name, approved: true, role: invite.role as typeof acc.role }
-          : acc;
-        if (invite) removePendingInvite(invite.email);
+
+        // Check for a link-based invite token stored by AuthScreen after signup
+        const storedToken = typeof localStorage !== 'undefined' ? localStorage.getItem('appercept_invite') : null;
+        const linkInviteValid = storedToken ? consumeInviteLink(storedToken) : false;
+        if (storedToken) localStorage.removeItem('appercept_invite');
+
+        let resolved = acc;
+        if (invite) {
+          resolved = { ...acc, name: invite.name, approved: true, role: invite.role as typeof acc.role };
+          removePendingInvite(invite.email);
+        } else if (linkInviteValid && !acc.approved) {
+          resolved = { ...acc, approved: true, role: 'member' };
+          // Write auto-approval back to Supabase (user updates their OWN row)
+          void updateProfileApproval(userId, { approved: true, role: 'member' });
+        }
 
         setAuthedAccount(resolved, justSignedIn);
         const firstName = resolved.name.trim().split(/\s+/)[0];

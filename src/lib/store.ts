@@ -21,6 +21,7 @@ interface AppState {
   justSignedIn: boolean; // transient — triggers the welcome screen, not persisted
   authChecked: boolean;  // transient — true once the real (Supabase) session has been resolved
   pendingInvites: { email: string; name: string; role: 'admin' | 'member' | 'viewer' }[];
+  inviteLinks: { token: string; createdAt: string; expiresAt: string; usedCount: number }[];
 
   // Messaging
   channels: Channel[];
@@ -112,6 +113,9 @@ interface AppState {
   setAuthChecked: (v: boolean) => void;
   addPendingInvite: (invite: { email: string; name: string; role: 'admin' | 'member' | 'viewer' }) => void;
   removePendingInvite: (email: string) => void;
+  generateInviteLink: () => string;
+  revokeInviteLink: (token: string) => void;
+  consumeInviteLink: (token: string) => boolean;
   changePassword: (currentPassword: string, newPassword: string) => { ok: boolean; error?: string };
   resetPassword: (email: string, newPassword: string) => { ok: boolean; error?: string };
   // Email-code reset flow
@@ -187,6 +191,7 @@ export const useAppStore = create<AppState>()(
       justSignedIn: false,
       authChecked: !isSupabaseConfigured,
       pendingInvites: [],
+      inviteLinks: [],
       channels: CHANNELS,
       chatMessages: CHAT_MESSAGES,
       portalMessages: PORTAL_MESSAGES,
@@ -577,6 +582,21 @@ export const useAppStore = create<AppState>()(
       clearJustSignedIn: () => set({ justSignedIn: false }),
       addPendingInvite: (invite: { email: string; name: string; role: 'admin' | 'member' | 'viewer' }) => set((s) => ({ pendingInvites: [...s.pendingInvites.filter(i => i.email.toLowerCase() !== invite.email.toLowerCase()), invite] })),
       removePendingInvite: (email: string) => set((s) => ({ pendingInvites: s.pendingInvites.filter(i => i.email.toLowerCase() !== email.toLowerCase()) })),
+      generateInviteLink: () => {
+        const token = Array.from(crypto.getRandomValues(new Uint8Array(18))).map(b => b.toString(16).padStart(2, '0')).join('');
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + 7 * 24 * 3600 * 1000).toISOString();
+        set((s) => ({ inviteLinks: [...s.inviteLinks, { token, createdAt: now.toISOString(), expiresAt, usedCount: 0 }] }));
+        return token;
+      },
+      revokeInviteLink: (token: string) => set((s) => ({ inviteLinks: s.inviteLinks.filter(l => l.token !== token) })),
+      consumeInviteLink: (token: string) => {
+        const links = useAppStore.getState().inviteLinks;
+        const link = links.find(l => l.token === token && new Date(l.expiresAt) > new Date());
+        if (!link) return false;
+        set((s) => ({ inviteLinks: s.inviteLinks.map(l => l.token === token ? { ...l, usedCount: l.usedCount + 1 } : l) }));
+        return true;
+      },
 
       changePassword: (currentPassword, newPassword) => {
         const acc = get().accounts.find((a) => a.id === get().sessionAccountId);
@@ -939,6 +959,7 @@ export const useAppStore = create<AppState>()(
         sidebarNavOrder: state.sidebarNavOrder,
         currentUserId: state.currentUserId,
         pendingInvites: state.pendingInvites,
+        inviteLinks: state.inviteLinks,
       }),
       // Always merge seed databases & pages over persisted data so new
       // entries added in seed.ts are never silently missing after a deploy.
@@ -1077,19 +1098,38 @@ export const useAppStore = create<AppState>()(
           };
         }
 
-        // Migrate projects: replace Budget (pc-budget) with Upfront + Monthly revenue columns.
+        // Migrate projects: always ensure Upfront (€) and Monthly (€) columns exist
+        // with the canonical IDs the finance engine reads. Also drops the old Budget column.
         const projDb = mergedDatabases['db-projects'];
-        if (projDb && projDb.columns.some(c => c.id === 'pc-budget')) {
-          mergedDatabases['db-projects'] = {
-            ...projDb,
-            columns: [
-              ...projDb.columns.filter(c => c.id !== 'pc-budget').map(c =>
-                c.id === 'pc-priority' ? { ...c, position: 8 } : c
-              ),
-              ...(!projDb.columns.some(c => c.id === 'pc-upfront') ? [{ id: 'pc-upfront', database_id: 'db-projects', name: 'Upfront (€)', type: 'number' as const, position: 6, config: { prefix: '€' }, hidden: false, width: 120 }] : []),
-              ...(!projDb.columns.some(c => c.id === 'pc-monthly') ? [{ id: 'pc-monthly', database_id: 'db-projects', name: 'Monthly (€)', type: 'number' as const, position: 7, config: { prefix: '€' }, hidden: false, width: 120 }] : []),
-            ],
-          };
+        if (projDb) {
+          const hasBudget  = projDb.columns.some(c => c.id === 'pc-budget');
+          const hasUpfront = projDb.columns.some(c => c.id === 'pc-upfront');
+          const hasMonthly = projDb.columns.some(c => c.id === 'pc-monthly');
+          if (hasBudget || !hasUpfront || !hasMonthly) {
+            // Preserve any cell values already stored under a user-added "Upfront" or "Monthly"
+            // column (generated ID) by migrating those cells to the canonical IDs.
+            const altUpfront = !hasUpfront ? projDb.columns.find(c => /upfront/i.test(c.name)) : null;
+            const altMonthly = !hasMonthly ? projDb.columns.find(c => /monthly/i.test(c.name)) : null;
+            const migratedRows = (altUpfront || altMonthly)
+              ? projDb.rows.map(r => {
+                  const cells = { ...r.cells };
+                  if (altUpfront && cells[altUpfront.id] != null) { cells['pc-upfront'] = cells[altUpfront.id]; delete cells[altUpfront.id]; }
+                  if (altMonthly && cells[altMonthly.id] != null) { cells['pc-monthly'] = cells[altMonthly.id]; delete cells[altMonthly.id]; }
+                  return { ...r, cells };
+                })
+              : projDb.rows;
+            mergedDatabases['db-projects'] = {
+              ...projDb,
+              rows: migratedRows,
+              columns: [
+                ...projDb.columns
+                  .filter(c => c.id !== 'pc-budget' && c.id !== altUpfront?.id && c.id !== altMonthly?.id)
+                  .map(c => c.id === 'pc-priority' ? { ...c, position: 8 } : c),
+                ...(!hasUpfront ? [{ id: 'pc-upfront', database_id: 'db-projects', name: 'Upfront (€)', type: 'number' as const, position: 6, config: { prefix: '€' }, hidden: false, width: 120 }] : []),
+                ...(!hasMonthly ? [{ id: 'pc-monthly', database_id: 'db-projects', name: 'Monthly (€)', type: 'number' as const, position: 7, config: { prefix: '€' }, hidden: false, width: 120 }] : []),
+              ],
+            };
+          }
         }
 
         return {
@@ -1138,6 +1178,7 @@ export const useAppStore = create<AppState>()(
           })(),
           sessionAccountId: p.sessionAccountId ?? null,
           pendingInvites: p.pendingInvites ?? [],
+          inviteLinks: p.inviteLinks ?? [],
           // Pre-mark seed portal clients as read so demo messages never show as
           // unread on a fresh install. Persisted read-stamps win if they exist.
           portalReadAt: (() => {

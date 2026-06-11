@@ -120,6 +120,7 @@ interface AppState {
   approveAccount: (id: string) => void;
   approveAsClient: (id: string, company: string) => void;
   revokeAccount: (id: string) => void;
+  mergeSupabaseAccounts: (incoming: Account[]) => void;
   deleteAccount: (id: string) => void;
   createAccount: (name: string, email: string, password: string, role: 'member' | 'viewer' | 'client', clientCompany?: string) => { ok: boolean; error?: string };
 
@@ -622,6 +623,20 @@ export const useAppStore = create<AppState>()(
       approveAccount: (id) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: true, role: a.role === 'viewer' || a.role === 'client' ? 'member' : a.role, client_company: undefined } : a)) })),
       approveAsClient: (id, company) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: true, role: 'client', client_company: company } : a)) })),
       revokeAccount: (id) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: false } : a)) })),
+      // Merge real Supabase profiles into the accounts list (admin approval UI),
+      // deduped by email. A live Supabase row (UUID id) wins over a seed/local
+      // placeholder for the same email so approvals act on the real account.
+      mergeSupabaseAccounts: (incoming) => set((s) => {
+        const byEmail = new Map<string, Account>();
+        for (const a of s.accounts) byEmail.set(a.email.toLowerCase(), a);
+        for (const a of incoming) {
+          const key = a.email.toLowerCase();
+          const existing = byEmail.get(key);
+          // Prefer the incoming Supabase row (real UUID, authoritative approved/role)
+          if (!existing || existing.id.startsWith('acc-')) byEmail.set(key, a);
+        }
+        return { accounts: Array.from(byEmail.values()) };
+      }),
       deleteAccount: (id) => set((s) => ({
         accounts: s.accounts.filter((a) => a.id !== id),
         sessionAccountId: s.sessionAccountId === id ? null : s.sessionAccountId,

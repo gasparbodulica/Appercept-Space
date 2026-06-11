@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { Topbar } from '@/components/layout/Topbar';
 import { User } from '@/lib/types';
+import { isSupabaseConfigured, fetchAllProfiles, updateProfileApproval } from '@/lib/auth';
 import {
   IconUser, IconBuilding, IconUsers, IconShield, IconUpload,
   IconTrash, IconPlus, IconCheck, IconX, IconPencil, IconKey, IconClock,
@@ -519,9 +520,36 @@ function RolesTab() {
 // ─── Access Tab (admin) ───────────────────────────────────────────────────────
 
 function AccessTab() {
-  const { accounts, databases, pages, approveAccount, approveAsClient, revokeAccount, deleteAccount, createAccount } = useAppStore();
+  const { accounts, databases, pages, approveAccount, approveAsClient, revokeAccount, deleteAccount, createAccount, mergeSupabaseAccounts } = useAppStore();
   const me = useCurrentAccount();
   const pending = accounts.filter((a) => !a.approved);
+
+  // Load all real Supabase profiles so self-sign-ups appear here for approval.
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const refreshProfiles = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    setLoadingProfiles(true); setLoadError('');
+    const profs = await fetchAllProfiles();
+    if (profs.length > 0) mergeSupabaseAccounts(profs);
+    else setLoadError('No profiles returned — check the profiles RLS policy in Supabase (admins must be able to read all rows).');
+    setLoadingProfiles(false);
+  }, [mergeSupabaseAccounts]);
+  useEffect(() => { void refreshProfiles(); }, [refreshProfiles]);
+
+  // Approve/revoke handlers that also persist to Supabase when configured.
+  const doApproveMember = (a: { id: string; role: string }) => {
+    approveAccount(a.id);
+    if (isSupabaseConfigured) void updateProfileApproval(a.id, { approved: true, role: a.role === 'viewer' || a.role === 'client' ? 'member' : a.role, client_company: null });
+  };
+  const doApproveClient = (id: string, company: string) => {
+    approveAsClient(id, company);
+    if (isSupabaseConfigured) void updateProfileApproval(id, { approved: true, role: 'client', client_company: company });
+  };
+  const doRevoke = (id: string) => {
+    revokeAccount(id);
+    if (isSupabaseConfigured) void updateProfileApproval(id, { approved: false });
+  };
   const teamAccounts = accounts.filter((a) => a.approved && a.role !== 'client');
   const clientAccounts = accounts.filter((a) => a.approved && a.role === 'client');
 
@@ -567,7 +595,14 @@ function AccessTab() {
               <span style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 20, height: 20, borderRadius: 10, background: 'var(--color-red)', color: '#fff', fontSize: 10, fontWeight: 800, padding: '0 5px' }}>{pending.length}</span>
             )}
           </CardLabel>
+          {isSupabaseConfigured && (
+            <button onClick={() => void refreshProfiles()} disabled={loadingProfiles} style={{ ...secondaryBtnStyle, padding: '5px 11px', fontSize: 'var(--text-xs)' }}>
+              {loadingProfiles ? 'Refreshing…' : '↻ Refresh'}
+            </button>
+          )}
         </div>
+
+        {loadError && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-amber)', marginBottom: 8, lineHeight: 1.5 }}>{loadError}</div>}
 
         <SettingsCard>
           {pending.length === 0 ? (
@@ -586,7 +621,7 @@ function AccessTab() {
                 </div>
                 {/* Action row */}
                 <div style={{ display: 'flex', gap: 8, paddingLeft: 46, flexWrap: 'wrap' }}>
-                  <button onClick={() => approveAccount(a.id)} style={{ ...approveBtn, gap: 5 }}>
+                  <button onClick={() => doApproveMember(a)} style={{ ...approveBtn, gap: 5 }}>
                     <IconCheck size={13} /> Approve as team member
                   </button>
                   <button
@@ -610,7 +645,7 @@ function AccessTab() {
                     </select>
                     <button
                       disabled={!selectedCompany}
-                      onClick={() => { if (selectedCompany) { approveAsClient(a.id, selectedCompany); setClientPickerFor(null); setSelectedCompany(''); } }}
+                      onClick={() => { if (selectedCompany) { doApproveClient(a.id, selectedCompany); setClientPickerFor(null); setSelectedCompany(''); } }}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 7, border: 'none', background: selectedCompany ? '#fb923c' : 'var(--color-bg-active)', color: selectedCompany ? '#fff' : 'var(--color-text-muted)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: selectedCompany ? 'pointer' : 'default' }}
                     ><IconCheck size={13} /> Confirm</button>
                     <button onClick={() => setClientPickerFor(null)} style={ghostSmallBtn}>Cancel</button>
@@ -702,7 +737,7 @@ function AccessTab() {
                 <RoleBadge role={a.role} />
                 {a.role !== 'admin' && (
                   <>
-                    <button onClick={() => revokeAccount(a.id)} title="Revoke access" style={ghostSmallBtn}>Revoke</button>
+                    <button onClick={() => doRevoke(a.id)} title="Revoke access" style={ghostSmallBtn}>Revoke</button>
                     <button onClick={() => deleteAccount(a.id)} title="Delete" style={iconDangerBtn}><IconTrash size={14} /></button>
                   </>
                 )}
@@ -734,7 +769,7 @@ function AccessTab() {
                   )}
                 </div>
                 <RoleBadge role={a.role} />
-                <button onClick={() => revokeAccount(a.id)} title="Revoke access" style={ghostSmallBtn}>Revoke</button>
+                <button onClick={() => doRevoke(a.id)} title="Revoke access" style={ghostSmallBtn}>Revoke</button>
                 <button onClick={() => deleteAccount(a.id)} title="Delete" style={iconDangerBtn}><IconTrash size={14} /></button>
               </div>
             </div>

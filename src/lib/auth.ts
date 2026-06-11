@@ -58,4 +58,24 @@ export async function sendResetEmail(email: string): Promise<{ ok: boolean; erro
   return { ok: true };
 }
 
+/** Fetch ALL profiles (admin approval UI). Requires an RLS policy that lets
+ *  authenticated users read the profiles table. Returns [] if not permitted. */
+export async function fetchAllProfiles(): Promise<Account[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('profiles').select('*');
+  if (error || !data) return [];
+  return (data as SupabaseProfile[]).map(profileToAccount);
+}
+
+/** Update a profile's approval/role/company in Supabase (admin only via RLS). */
+export async function updateProfileApproval(
+  userId: string,
+  fields: { approved?: boolean; role?: string; client_company?: string | null },
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: 'Auth is not configured.' };
+  const { error } = await supabase.from('profiles').update(fields).eq('id', userId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export { isSupabaseConfigured };

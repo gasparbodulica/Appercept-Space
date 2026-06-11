@@ -6,7 +6,7 @@ import { useAppStore } from '@/lib/store';
 import { applyCellFilter, getStatusConfig } from '@/lib/utils';
 import { IconChevronLeft, IconChevronRight, IconPlus, IconCalendarEvent, IconDownload, IconX } from '@tabler/icons-react';
 
-const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 interface CalendarViewProps {
@@ -49,7 +49,8 @@ export function CalendarView({ database, view }: CalendarViewProps) {
 
   const firstDayOfMonth = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startPad = firstDayOfMonth.getDay();
+  // Monday-first: shift so Mon=0, Tue=1, …, Sun=6 (getDay returns Sun=0)
+  const startPad = (firstDayOfMonth.getDay() + 6) % 7;
 
   const cells: (number | null)[] = [
     ...Array(startPad).fill(null),

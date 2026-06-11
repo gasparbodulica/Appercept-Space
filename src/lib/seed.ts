@@ -101,14 +101,15 @@ const CLIENT_ROWS: Row[] = [];
 
 // ─── PROJECTS DATABASE ────────────────────────────────────────────────────────
 const PROJECT_COLS: Column[] = [
-  { id: 'pc-name', database_id: 'db-projects', name: 'Project name', type: 'text', position: 0, config: {}, hidden: false, width: 240 },
-  { id: 'pc-client', database_id: 'db-projects', name: 'Client', type: 'text', position: 1, config: {}, hidden: false, width: 160 },
-  { id: 'pc-status', database_id: 'db-projects', name: 'Status', type: 'status', position: 2, config: {}, hidden: false, width: 130 },
-  { id: 'pc-progress', database_id: 'db-projects', name: 'Progress', type: 'number', position: 3, config: { suffix: '%' }, hidden: false, width: 100 },
-  { id: 'pc-start', database_id: 'db-projects', name: 'Start date', type: 'date', position: 4, config: {}, hidden: false, width: 110 },
-  { id: 'pc-end', database_id: 'db-projects', name: 'End date', type: 'date', position: 5, config: {}, hidden: false, width: 110 },
-  { id: 'pc-budget', database_id: 'db-projects', name: 'Budget', type: 'number', position: 6, config: { prefix: '€' }, hidden: false, width: 110 },
-  { id: 'pc-priority', database_id: 'db-projects', name: 'Priority', type: 'priority', position: 7, config: {}, hidden: false, width: 100 },
+  { id: 'pc-name',     database_id: 'db-projects', name: 'Project name',  type: 'text',     position: 0, config: {},               hidden: false, width: 240 },
+  { id: 'pc-client',   database_id: 'db-projects', name: 'Client',        type: 'text',     position: 1, config: {},               hidden: false, width: 160 },
+  { id: 'pc-status',   database_id: 'db-projects', name: 'Status',        type: 'status',   position: 2, config: {},               hidden: false, width: 130 },
+  { id: 'pc-progress', database_id: 'db-projects', name: 'Progress',      type: 'number',   position: 3, config: { suffix: '%' },  hidden: false, width: 100 },
+  { id: 'pc-start',    database_id: 'db-projects', name: 'Start date',    type: 'date',     position: 4, config: {},               hidden: false, width: 110 },
+  { id: 'pc-end',      database_id: 'db-projects', name: 'End date',      type: 'date',     position: 5, config: {},               hidden: false, width: 110 },
+  { id: 'pc-upfront',  database_id: 'db-projects', name: 'Upfront (€)',   type: 'number',   position: 6, config: { prefix: '€' },  hidden: false, width: 120 },
+  { id: 'pc-monthly',  database_id: 'db-projects', name: 'Monthly (€)',   type: 'number',   position: 7, config: { prefix: '€' },  hidden: false, width: 120 },
+  { id: 'pc-priority', database_id: 'db-projects', name: 'Priority',      type: 'priority', position: 8, config: {},               hidden: false, width: 100 },
 ];
 
 const PROJECT_ROWS: Row[] = [];

@@ -1051,6 +1051,21 @@ export const useAppStore = create<AppState>()(
         // Team & Roles DB was merged into the Team & Revenue page — drop it.
         delete mergedDatabases['db-team'];
 
+        // Migrate projects: replace Budget (pc-budget) with Upfront + Monthly revenue columns.
+        const projDb = mergedDatabases['db-projects'];
+        if (projDb && projDb.columns.some(c => c.id === 'pc-budget')) {
+          mergedDatabases['db-projects'] = {
+            ...projDb,
+            columns: [
+              ...projDb.columns.filter(c => c.id !== 'pc-budget').map(c =>
+                c.id === 'pc-priority' ? { ...c, position: 8 } : c
+              ),
+              ...(!projDb.columns.some(c => c.id === 'pc-upfront') ? [{ id: 'pc-upfront', database_id: 'db-projects', name: 'Upfront (€)', type: 'number' as const, position: 6, config: { prefix: '€' }, hidden: false, width: 120 }] : []),
+              ...(!projDb.columns.some(c => c.id === 'pc-monthly') ? [{ id: 'pc-monthly', database_id: 'db-projects', name: 'Monthly (€)', type: 'number' as const, position: 7, config: { prefix: '€' }, hidden: false, width: 120 }] : []),
+            ],
+          };
+        }
+
         return {
           ...current,
           ...p,

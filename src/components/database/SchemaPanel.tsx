@@ -240,10 +240,10 @@ export function SchemaPanel({ databaseId, onClose }: SchemaPanelProps) {
                   {COLUMN_TYPES.map(t => <option key={t.type} value={t.type}>{t.label}</option>)}
                 </select>
               </div>
-              <button onClick={() => { if (newColName.trim()) { addColumn(databaseId, { name: newColName.trim(), type: newColType }); setNewColName(''); } }}
+              <button
                 disabled={!newColName.trim()}
-                style={{ marginTop: 8, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '7px 0', borderRadius: 7, border: 'none', background: newColName.trim() ? 'var(--gradient-accent)' : 'var(--color-bg-active)', color: newColName.trim() ? '#fff' : 'var(--color-text-muted)', fontSize: 'var(--text-sm)', fontWeight: 600, cursor: newColName.trim() ? 'pointer' : 'default' }}
-                onClick={() => { if (newColName.trim()) { addColumn(databaseId, { database_id: databaseId, name: newColName.trim(), type: newColType, position: columns.length, config: defaultConfigForType(newColType), hidden: false, width: 160 }); setNewColName(''); } }}>
+                onClick={() => { if (newColName.trim()) { addColumn(databaseId, { database_id: databaseId, name: newColName.trim(), type: newColType, position: columns.length, config: defaultConfigForType(newColType), hidden: false, width: 160 }); setNewColName(''); } }}
+                style={{ marginTop: 8, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '7px 0', borderRadius: 7, border: 'none', background: newColName.trim() ? 'var(--gradient-accent)' : 'var(--color-bg-active)', color: newColName.trim() ? '#fff' : 'var(--color-text-muted)', fontSize: 'var(--text-sm)', fontWeight: 600, cursor: newColName.trim() ? 'pointer' : 'default' }}>
                 <IconPlus size={14} /> Add property
               </button>
             </div>

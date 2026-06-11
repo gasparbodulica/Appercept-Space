@@ -448,16 +448,9 @@ function ClubCrowdDashboard({ pageId, pageTitle, pageIcon, pageIconColor }: { pa
                     transition: 'border-color 120ms, box-shadow 120ms, transform 120ms',
                     boxShadow: '0 4px 18px rgba(0,0,0,0.28)',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#635bff'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(99,91,255,0.22)'; e.currentTarget.style.transform = 'translateY(-2px)'; (e.currentTarget.querySelector('.row-delete-btn') as HTMLElement | null)?.style.setProperty('opacity','1'); }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.28)'; e.currentTarget.style.transform = 'translateY(0)'; (e.currentTarget.querySelector('.row-delete-btn') as HTMLElement | null)?.style.setProperty('opacity','0'); }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#635bff'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(99,91,255,0.22)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.querySelectorAll('.row-delete-btn').forEach((b) => (b as HTMLElement).style.setProperty('opacity','1')); }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.28)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.querySelectorAll('.row-delete-btn').forEach((b) => (b as HTMLElement).style.setProperty('opacity','0')); }}
                 >
-                  {/* Delete button */}
-                  <button className="row-delete-btn" onClick={e => { e.stopPropagation(); db && deleteRow(db.id, v.id); }}
-                    style={{ position: 'absolute', top: 12, right: 12, zIndex: 3, width: 26, height: 26, borderRadius: 6, border: 'none', background: 'var(--color-bg-active)', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 120ms, color 120ms, background 120ms' }}
-                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'var(--color-red-bg)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'var(--color-bg-active)'; }}>
-                    <IconTrash size={13} />
-                  </button>
                   {/* Revenue strip — width reflects share of top venue */}
                   <div style={{ height: 5, background: 'rgba(99,91,255,0.15)' }}>
                     <div style={{ height: '100%', width: `${revPct}%`, background: 'linear-gradient(90deg, #635bff, #a78bfa)', transition: 'width 500ms' }} />
@@ -515,6 +508,13 @@ function ClubCrowdDashboard({ pageId, pageTitle, pageIcon, pageIconColor }: { pa
                       {stripeCfg.icon}{stripeCfg.label}
                     </span>
                     <div style={{ flex: 1 }} />
+                    <button className="row-delete-btn" onClick={e => { e.stopPropagation(); db && deleteRow(db.id, v.id); }}
+                      title="Delete venue"
+                      style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 120ms, color 120ms, background 120ms', flexShrink: 0 }}
+                      onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'var(--color-red-bg)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'none'; }}>
+                      <IconTrash size={12} />
+                    </button>
                     {isConnected ? (
                       <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>{v.stripeId.slice(0, 14)}…</span>
                     ) : (

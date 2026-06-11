@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { computeClientHealth } from '@/lib/health';
 import { Topbar } from '@/components/layout/Topbar';
@@ -353,7 +354,7 @@ export default function ClientPortalPage() {
                     <IconDots size={15} />
                   </button>
                 )}
-                {editMenu === c.name && editMenuAnchor && (
+                {editMenu === c.name && editMenuAnchor && typeof document !== 'undefined' && createPortal(
                   <>
                     <div style={{ position: 'fixed', inset: 0, zIndex: 1400 }} onClick={(e) => { e.stopPropagation(); setEditMenu(null); setEditMenuAnchor(null); }} />
                     <div onClick={(e) => e.stopPropagation()} style={{ position: 'fixed', top: editMenuAnchor.top, right: editMenuAnchor.right, width: 230, zIndex: 1401, background: 'var(--color-bg-popover)', border: '0.5px solid var(--color-border-strong)', borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.55)', padding: 14 }}>
@@ -384,7 +385,8 @@ export default function ClientPortalPage() {
                         </button>
                       </div>
                     </div>
-                  </>
+                  </>,
+                  document.body
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                   {/* Health score ring */}

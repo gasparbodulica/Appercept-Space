@@ -27,9 +27,11 @@ export function SupabaseAuthSync() {
       else if (active) setAuthedAccount(null);
     };
 
-    // 1) Resolve the existing session on load
+    // 1) Resolve the existing session on load — treat a remembered session as
+    //    justSignedIn so the WelcomeScreen appears even on auto-login.
     supabase.auth.getSession().then(async ({ data }) => {
-      await apply(data.session?.user?.id, false);
+      const hasSession = !!data.session?.user?.id;
+      await apply(data.session?.user?.id, hasSession);
       if (active) setAuthChecked(true);
     });
 

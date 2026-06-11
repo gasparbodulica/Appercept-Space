@@ -92,9 +92,8 @@ const CLIENT_COLS: Column[] = [
   { id: 'cc-email', database_id: 'db-clients', name: 'Email', type: 'email', position: 2, config: {}, hidden: false, width: 200 },
   { id: 'cc-phone', database_id: 'db-clients', name: 'Phone', type: 'phone', position: 3, config: {}, hidden: false, width: 140 },
   { id: 'cc-status', database_id: 'db-clients', name: 'Status', type: 'select', position: 4, config: { options: [{ id: 'o1', label: 'Active', color: '#3ecf8e' }, { id: 'o2', label: 'Pending', color: '#f5a623' }, { id: 'o3', label: 'Inactive', color: '#6b7280' }] }, hidden: false, width: 100 },
-  { id: 'cc-revenue', database_id: 'db-clients', name: 'Revenue', type: 'number', position: 5, config: { prefix: '€' }, hidden: false, width: 130 },
-  { id: 'cc-frequency', database_id: 'db-clients', name: 'Frequency', type: 'select', position: 6, config: { options: [{ id: 'cfr-once', label: 'One-time', color: '#6b7280' }, { id: 'cfr-month', label: 'Monthly', color: '#3ecf8e' }, { id: 'cfr-year', label: 'Yearly', color: '#a78bfa' }] }, hidden: false, width: 120 },
-  { id: 'cc-notes', database_id: 'db-clients', name: 'Notes', type: 'text', position: 7, config: {}, hidden: false, width: 240 },
+  { id: 'cc-monthly', database_id: 'db-clients', name: 'Monthly retainer (€)', type: 'number', position: 5, config: { prefix: '€' }, hidden: false, width: 160 },
+  { id: 'cc-notes', database_id: 'db-clients', name: 'Notes', type: 'text', position: 6, config: {}, hidden: false, width: 240 },
 ];
 
 const CLIENT_ROWS: Row[] = [];

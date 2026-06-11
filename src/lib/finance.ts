@@ -140,27 +140,58 @@ function clientMatchesCompany(clientCompany: string, companyName: string): boole
 
 /**
  * A company's monthly revenue:
- *   • Appercept (the agency) → sum of ALL clients' effective revenue
- *   • any other company       → that company's own client revenue (matched by name)
+ *   Appercept (the agency) → sum of ALL clients' monthly: retainers (cc-monthly) + project recurring (pc-monthly)
+ *   Any other company      → that company's own retainer + project monthly fees
  */
-export function companyRevenue(clientsDb: Database | undefined, companyName: string): number {
-  if (!clientsDb || !companyName) return 0;
-  const revCol = clientsDb.columns.find(c => c.type === 'number');
-  const freqCol = clientsDb.columns.find(c => c.name === 'Frequency');
-  const statusCol = clientsDb.columns.find(c => c.name === 'Status');
-  const companyCol = clientsDb.columns.find(c => c.name === 'Company');
-  if (!revCol) return 0;
+export function companyRevenue(clientsDb: Database | undefined, companyName: string, projectsDb?: Database): number {
+  if (!companyName) return 0;
 
-  const isAgency = companyName.trim().toLowerCase() === 'appercept';
-  let total = 0;
-  for (const row of clientsDb.rows) {
-    if (!isAgency) {
-      const cc = companyCol ? String(row.cells[companyCol.id] ?? '') : '';
-      if (!clientMatchesCompany(cc, companyName)) continue;
+  // Sum monthly retainer from Clients DB (cc-monthly column)
+  let retainer = 0;
+  if (clientsDb) {
+    const monthlyCol = clientsDb.columns.find(c => c.id === 'cc-monthly' || c.name === 'Monthly retainer (€)');
+    const revCol = !monthlyCol ? clientsDb.columns.find(c => c.type === 'number') : null;
+    const freqCol = clientsDb.columns.find(c => c.name === 'Frequency');
+    const statusCol = clientsDb.columns.find(c => c.name === 'Status');
+    const companyCol = clientsDb.columns.find(c => c.name === 'Company');
+    const isAgency = companyName.trim().toLowerCase() === 'appercept';
+    for (const row of clientsDb.rows) {
+      if (!isAgency && companyCol) {
+        const cc = String(row.cells[companyCol.id] ?? '');
+        if (!clientMatchesCompany(cc, companyName)) continue;
+      }
+      const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
+      if (status === 'Inactive') continue;
+      if (monthlyCol) {
+        retainer += Number(row.cells[monthlyCol.id]) || 0;
+      } else if (revCol) {
+        // Legacy fallback: old revenue+frequency columns
+        retainer += clientEffectiveRevenue(row, revCol.id, freqCol?.id, statusCol?.id);
+      }
     }
-    total += clientEffectiveRevenue(row, revCol.id, freqCol?.id, statusCol?.id);
   }
-  return Math.round(total);
+
+  // Sum monthly recurring from Projects DB (pc-monthly column)
+  let projectMonthly = 0;
+  if (projectsDb) {
+    const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly');
+    const clientCol  = projectsDb.columns.find(c => c.name === 'Client');
+    const statusCol  = projectsDb.columns.find(c => c.type === 'status');
+    if (monthlyCol && clientCol) {
+      const isAgency = companyName.trim().toLowerCase() === 'appercept';
+      for (const row of projectsDb.rows) {
+        if (!isAgency) {
+          const cc = String(row.cells[clientCol.id] ?? '');
+          if (!clientMatchesCompany(cc, companyName)) continue;
+        }
+        const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
+        if (status === 'Done' || status === 'Completed') continue; // closed projects don't recur
+        projectMonthly += Number(row.cells[monthlyCol.id]) || 0;
+      }
+    }
+  }
+
+  return Math.round(retainer + projectMonthly);
 }
 
 /**
@@ -191,19 +222,41 @@ export function computeConsultingRevenue(consultingDb: Database | undefined): { 
   return { revenue: Math.round(revenue), count };
 }
 
-/** Total monthly revenue Appercept earns from all its clients (frequency-aware). */
-export function computeClientRevenue(clientsDb: Database | undefined): { revenue: number; activeCount: number } {
-  if (!clientsDb) return { revenue: 0, activeCount: 0 };
-  const revCol = clientsDb.columns.find(c => c.type === 'number');
-  const freqCol = clientsDb.columns.find(c => c.name === 'Frequency');
-  const statusCol = clientsDb.columns.find(c => c.name === 'Status');
-  if (!revCol) return { revenue: 0, activeCount: 0 };
+/** Total monthly revenue from all clients: retainers (Clients DB) + project recurring (Projects DB). */
+export function computeClientRevenue(clientsDb: Database | undefined, projectsDb?: Database): { revenue: number; activeCount: number } {
   let revenue = 0;
   let activeCount = 0;
-  for (const row of clientsDb.rows) {
-    const eff = clientEffectiveRevenue(row, revCol.id, freqCol?.id, statusCol?.id);
-    if (eff > 0) { revenue += eff; activeCount += 1; }
+
+  // Monthly retainers from Clients DB
+  if (clientsDb) {
+    const monthlyCol = clientsDb.columns.find(c => c.id === 'cc-monthly' || c.name === 'Monthly retainer (€)');
+    const revCol = !monthlyCol ? clientsDb.columns.find(c => c.type === 'number') : null;
+    const freqCol = clientsDb.columns.find(c => c.name === 'Frequency');
+    const statusCol = clientsDb.columns.find(c => c.name === 'Status');
+    for (const row of clientsDb.rows) {
+      const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
+      if (status === 'Inactive') continue;
+      const eff = monthlyCol
+        ? (Number(row.cells[monthlyCol.id]) || 0)
+        : (revCol ? clientEffectiveRevenue(row, revCol.id, freqCol?.id, statusCol?.id) : 0);
+      if (eff > 0) { revenue += eff; activeCount += 1; }
+    }
   }
+
+  // Monthly recurring from Projects DB (active/in-progress projects)
+  if (projectsDb) {
+    const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly');
+    const statusCol  = projectsDb.columns.find(c => c.type === 'status');
+    if (monthlyCol) {
+      for (const row of projectsDb.rows) {
+        const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
+        if (status === 'Done' || status === 'Completed') continue;
+        const m = Number(row.cells[monthlyCol.id]) || 0;
+        if (m > 0) revenue += m;
+      }
+    }
+  }
+
   return { revenue: Math.round(revenue), activeCount };
 }
 

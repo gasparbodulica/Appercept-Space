@@ -70,7 +70,7 @@ export default function DashboardPage() {
   });
 
   // ── Appercept finances: retainers + consulting + club fees − expenses = profit ──
-  const { revenue: clientRevenue, activeCount: clientCount } = computeClientRevenue(clientsDb);
+  const { revenue: clientRevenue, activeCount: clientCount } = computeClientRevenue(clientsDb, projectsDb);
   const { revenue: consultingRevenue, count: consultingCount } = computeConsultingRevenue(consultingDb);
   const { monthlyAvg: clubMonthlyAvg } = computeClubRevenue(clubcrowdDb);
   const finance = computeCompanyFinance(costsDb, 'Appercept', clientRevenue, consultingRevenue, clubMonthlyAvg);

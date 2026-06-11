@@ -90,8 +90,26 @@ export function ClientPortalView({ company, mode }: { company: string; mode: 'ag
   const clientInfo = useMemo(() => {
     if (!clientRow || !clientsDb) return {};
     const get = (name: string) => { const col = clientsDb.columns.find(c => c.name === name); return col ? String(clientRow.cells[col.id] ?? '') : ''; };
-    return { email: get('Email'), phone: get('Phone'), revenue: get('Revenue'), name: get('Name'), notes: get('Notes') };
+    const getById = (id: string) => { const col = clientsDb.columns.find(c => c.id === id); return col ? String(clientRow.cells[col.id] ?? '') : ''; };
+    return { email: get('Email'), phone: get('Phone'), monthly: getById('cc-monthly') || get('Monthly retainer (€)'), name: get('Name'), notes: get('Notes') };
   }, [clientsDb, clientRow]);
+
+  // Upfront + monthly from linked projects
+  const projectRevenue = useMemo(() => {
+    if (!projectsDb) return { upfront: 0, monthly: 0 };
+    const clientCol  = projectsDb.columns.find(c => c.name === 'Client');
+    const upfrontCol = projectsDb.columns.find(c => c.id === 'pc-upfront');
+    const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly');
+    const statusCol  = projectsDb.columns.find(c => c.type === 'status');
+    let upfront = 0, monthly = 0;
+    for (const r of projectsDb.rows) {
+      if (clientCol && !clientMatches(String(r.cells[clientCol.id] ?? ''), company)) continue;
+      const status = statusCol ? String(r.cells[statusCol.id] ?? '') : '';
+      if (upfrontCol) upfront += Number(r.cells[upfrontCol.id]) || 0;
+      if (monthlyCol && status !== 'Done' && status !== 'Completed') monthly += Number(r.cells[monthlyCol.id]) || 0;
+    }
+    return { upfront, monthly };
+  }, [projectsDb, company]);
 
   const thread = useMemo(
     () => portalMessages.filter((m) => m.client === company).sort((a, b) => a.created_at.localeCompare(b.created_at)),
@@ -132,7 +150,12 @@ export function ClientPortalView({ company, mode }: { company: string; mode: 'ag
             </span>
             {clientInfo.email && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{clientInfo.email}</span>}
             {clientInfo.phone && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{clientInfo.phone}</span>}
-            {clientInfo.revenue && Number(clientInfo.revenue) > 0 && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-teal)', fontWeight: 600 }}>€{Number(clientInfo.revenue).toLocaleString()}/mo</span>}
+            {projectRevenue.upfront > 0 && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-accent-bright)', fontWeight: 600 }}>€{projectRevenue.upfront.toLocaleString()} upfront</span>}
+            {(projectRevenue.monthly + Number(clientInfo.monthly || 0)) > 0 && (
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-teal)', fontWeight: 600 }}>
+                €{(projectRevenue.monthly + Number(clientInfo.monthly || 0)).toLocaleString()}/mo
+              </span>
+            )}
           </div>
         </div>
         {/* Health score badge */}

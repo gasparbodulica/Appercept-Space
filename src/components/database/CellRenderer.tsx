@@ -176,7 +176,8 @@ function DisplayCell({ column, row, databaseId, value, onClick }: { column: Colu
       const nameCol = db?.columns.find(c => c.position === 0);
       const companyName = nameCol ? String(row.cells[nameCol.id] ?? '') : '';
       const prefix = column.config.prefix ?? '';
-      const revenue = companyRevenue(findClientsDb(databases), companyName);
+      const projectsDb = Object.values(databases).find(d => d.id === 'db-projects');
+      const revenue = companyRevenue(findClientsDb(databases), companyName, projectsDb);
       const expenses = companyMonthlyExpenses(findCostsDb(databases), companyName);
 
       // Monthly revenue (from clients, frequency-aware)

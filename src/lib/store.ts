@@ -1051,6 +1051,18 @@ export const useAppStore = create<AppState>()(
         // Team & Roles DB was merged into the Team & Revenue page — drop it.
         delete mergedDatabases['db-team'];
 
+        // Migrate Clients DB: replace Revenue+Frequency with Monthly retainer column.
+        const clientsDbM = mergedDatabases['db-clients'];
+        if (clientsDbM && clientsDbM.columns.some(c => c.id === 'cc-revenue') && !clientsDbM.columns.some(c => c.id === 'cc-monthly')) {
+          mergedDatabases['db-clients'] = {
+            ...clientsDbM,
+            columns: [
+              ...clientsDbM.columns.filter(c => c.id !== 'cc-revenue' && c.id !== 'cc-frequency'),
+              { id: 'cc-monthly', database_id: 'db-clients', name: 'Monthly retainer (€)', type: 'number' as const, position: 5, config: { prefix: '€' }, hidden: false, width: 160 },
+            ],
+          };
+        }
+
         // Migrate projects: replace Budget (pc-budget) with Upfront + Monthly revenue columns.
         const projDb = mergedDatabases['db-projects'];
         if (projDb && projDb.columns.some(c => c.id === 'pc-budget')) {

@@ -267,7 +267,8 @@ export default function DashboardPage() {
             netCashFlow={netCashFlow}
             runwayMonths={runwayMonths}
             revenueStreams={[
-              { label: 'Retainers', amount: finance.revenue, color: 'var(--color-teal)' },
+              { label: 'Project upfronts (this month)', amount: upfrontThisMonth, color: 'var(--color-accent-bright)' },
+              { label: 'Project recurring', amount: monthlyRecurring, color: 'var(--color-teal)' },
               { label: 'Consulting', amount: finance.consultingRevenue, color: '#a78bfa' },
               { label: 'Clubs', amount: finance.clubRevenue, color: '#635bff' },
             ].filter((s) => s.amount > 0)}

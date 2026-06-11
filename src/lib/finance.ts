@@ -244,8 +244,10 @@ export function computeClientRevenue(clientsDb: Database | undefined, projectsDb
 
 /**
  * Project revenue breakdown for the current month:
- *   upfrontThisMonth — sum of pc-upfront for projects whose start date is this month
- *                      (or have no start date, treating them as starting now)
+ *   upfrontThisMonth — sum of pc-upfront for projects whose upfront landed THIS month.
+ *                      The "upfront month" is the Start date if set, otherwise the
+ *                      month the project row was created. This way a one-time payment
+ *                      counts exactly once, in the month it happened.
  *   monthlyRecurring — sum of pc-monthly for all non-completed projects
  */
 export function computeProjectRevenue(projectsDb: Database | undefined): { upfrontThisMonth: number; monthlyRecurring: number } {
@@ -259,11 +261,13 @@ export function computeProjectRevenue(projectsDb: Database | undefined): { upfro
   for (const row of projectsDb.rows) {
     const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
     const isDone = status === 'Done' || status === 'Completed';
-    // Upfront: count if project started this month (or no start date = assume this month)
+    // Upfront: count in the month it landed — Start date, else the row's created month.
     if (upfrontCol && !isDone) {
-      const startDate = startCol ? String(row.cells[startCol.id] ?? '') : '';
-      if (!startDate || ym(startDate) === curYM) {
-        upfrontThisMonth += Number(row.cells[upfrontCol.id]) || 0;
+      const upfront = Number(row.cells[upfrontCol.id]) || 0;
+      if (upfront > 0) {
+        const startDate = startCol ? String(row.cells[startCol.id] ?? '') : '';
+        const upfrontMonth = startDate ? ym(startDate) : (row.created_at ? ym(row.created_at) : curYM);
+        if (upfrontMonth === curYM) upfrontThisMonth += upfront;
       }
     }
     // Monthly: count all active projects

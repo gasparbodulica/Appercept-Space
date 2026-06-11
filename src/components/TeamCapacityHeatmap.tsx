@@ -5,6 +5,11 @@ import { useAppStore } from '@/lib/store';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
+// Local YYYY-MM-DD (avoids the UTC shift that toISOString() introduces in +N timezones)
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function getThisWeekDates(): string[] {
   const now = new Date();
   const day = now.getDay(); // 0=Sun
@@ -14,7 +19,7 @@ function getThisWeekDates(): string[] {
   return DAYS.map((_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    return d.toISOString().split('T')[0];
+    return localDateStr(d);
   });
 }
 
@@ -94,7 +99,7 @@ export function TeamCapacityHeatmap() {
     return 'var(--color-text-muted)';
   };
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateStr(new Date());
   const todayIdx = weekDates.indexOf(today);
 
   return (

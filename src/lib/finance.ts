@@ -222,41 +222,23 @@ export function computeConsultingRevenue(consultingDb: Database | undefined): { 
   return { revenue: Math.round(revenue), count };
 }
 
-/** Total monthly revenue from all clients: retainers (Clients DB) + project recurring (Projects DB). */
+/**
+ * Client revenue & active count. Revenue comes ONLY from Projects DB recurring
+ * (single source of truth — no editable revenue column in Clients DB), so a
+ * client/project's €600/mo is never counted twice.
+ * activeCount = number of non-inactive clients in the Clients DB.
+ */
 export function computeClientRevenue(clientsDb: Database | undefined, projectsDb?: Database): { revenue: number; activeCount: number } {
-  let revenue = 0;
   let activeCount = 0;
-
-  // Monthly retainers from Clients DB
   if (clientsDb) {
-    const monthlyCol = clientsDb.columns.find(c => c.id === 'cc-monthly' || c.name === 'Monthly retainer (€)');
-    const revCol = !monthlyCol ? clientsDb.columns.find(c => c.type === 'number') : null;
-    const freqCol = clientsDb.columns.find(c => c.name === 'Frequency');
     const statusCol = clientsDb.columns.find(c => c.name === 'Status');
     for (const row of clientsDb.rows) {
       const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
       if (status === 'Inactive') continue;
-      const eff = monthlyCol
-        ? (Number(row.cells[monthlyCol.id]) || 0)
-        : (revCol ? clientEffectiveRevenue(row, revCol.id, freqCol?.id, statusCol?.id) : 0);
-      if (eff > 0) { revenue += eff; activeCount += 1; }
+      activeCount += 1;
     }
   }
-
-  // Monthly recurring from Projects DB (active/in-progress projects)
-  if (projectsDb) {
-    const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly');
-    const statusCol  = projectsDb.columns.find(c => c.type === 'status');
-    if (monthlyCol) {
-      for (const row of projectsDb.rows) {
-        const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
-        if (status === 'Done' || status === 'Completed') continue;
-        const m = Number(row.cells[monthlyCol.id]) || 0;
-        if (m > 0) revenue += m;
-      }
-    }
-  }
-
+  const revenue = projectsDb ? computeProjectRevenue(projectsDb).monthlyRecurring : 0;
   return { revenue: Math.round(revenue), activeCount };
 }
 

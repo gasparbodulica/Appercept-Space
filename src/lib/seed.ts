@@ -92,9 +92,7 @@ const CLIENT_COLS: Column[] = [
   { id: 'cc-email', database_id: 'db-clients', name: 'Email', type: 'email', position: 2, config: {}, hidden: false, width: 200 },
   { id: 'cc-phone', database_id: 'db-clients', name: 'Phone', type: 'phone', position: 3, config: {}, hidden: false, width: 140 },
   { id: 'cc-status', database_id: 'db-clients', name: 'Status', type: 'select', position: 4, config: { options: [{ id: 'o1', label: 'Active', color: '#3ecf8e' }, { id: 'o2', label: 'Pending', color: '#f5a623' }, { id: 'o3', label: 'Inactive', color: '#6b7280' }] }, hidden: false, width: 100 },
-  { id: 'cc-upfront', database_id: 'db-clients', name: 'Upfront (€)',         type: 'number', position: 5, config: { prefix: '€' }, hidden: false, width: 130 },
-  { id: 'cc-monthly', database_id: 'db-clients', name: 'Monthly (€)',         type: 'number', position: 6, config: { prefix: '€' }, hidden: false, width: 120 },
-  { id: 'cc-notes',   database_id: 'db-clients', name: 'Notes',               type: 'text',   position: 7, config: {},               hidden: false, width: 240 },
+  { id: 'cc-notes', database_id: 'db-clients', name: 'Notes', type: 'text', position: 5, config: {}, hidden: false, width: 240 },
 ];
 
 const CLIENT_ROWS: Row[] = [];

@@ -5,7 +5,7 @@ import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { USERS } from '@/lib/seed';
 import { Topbar } from '@/components/layout/Topbar';
 import { WeatherWidget } from '@/components/WeatherWidget';
-import { computeCompanyFinance, computeClientRevenue, computeConsultingRevenue, computeClubRevenue, type CompanyFinance } from '@/lib/finance';
+import { computeCompanyFinance, computeClientRevenue, computeConsultingRevenue, computeClubRevenue, computeProjectRevenue, type CompanyFinance } from '@/lib/finance';
 import { TeamCapacityHeatmap } from '@/components/TeamCapacityHeatmap';
 import { WorldClocks } from '@/components/WorldClocks';
 import { IconCircleCheck, IconCircleFilled, IconCalendar, IconFileText, IconCurrencyEuro, IconSun, IconSunset, IconMoon, IconTrendingUp, IconTrendingDown, IconBuildingFactory2, IconAlertTriangle, IconMusic, IconChevronRight, IconBrandStripe, IconWallet, IconScale, IconArrowsExchange, IconClockHour4 } from '@tabler/icons-react';
@@ -69,11 +69,14 @@ export default function DashboardPage() {
     return page?.slug === 'cashflow';
   });
 
-  // ── Appercept finances: retainers + consulting + club fees − expenses = profit ──
-  const { revenue: clientRevenue, activeCount: clientCount } = computeClientRevenue(clientsDb, projectsDb);
+  // ── Appercept finances: project upfront (this month) + recurring + consulting + club − expenses = profit ──
+  const { upfrontThisMonth, monthlyRecurring } = computeProjectRevenue(projectsDb);
+  const { activeCount: clientCount } = computeClientRevenue(clientsDb);
+  const clientRevenue = monthlyRecurring; // recurring monthly shown as the "client revenue" stat
   const { revenue: consultingRevenue, count: consultingCount } = computeConsultingRevenue(consultingDb);
   const { monthlyAvg: clubMonthlyAvg } = computeClubRevenue(clubcrowdDb);
-  const finance = computeCompanyFinance(costsDb, 'Appercept', clientRevenue, consultingRevenue, clubMonthlyAvg);
+  // This month's client revenue = upfront (one-time, this month) + recurring monthly
+  const finance = computeCompanyFinance(costsDb, 'Appercept', upfrontThisMonth + monthlyRecurring, consultingRevenue, clubMonthlyAvg);
 
   // ── ClubCrowd snapshot: season-adjusted yearly revenue + pipeline counts ──
   const clubSeasonMonths = (label: string): number => {

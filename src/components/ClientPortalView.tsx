@@ -90,8 +90,7 @@ export function ClientPortalView({ company, mode }: { company: string; mode: 'ag
   const clientInfo = useMemo(() => {
     if (!clientRow || !clientsDb) return {};
     const get = (name: string) => { const col = clientsDb.columns.find(c => c.name === name); return col ? String(clientRow.cells[col.id] ?? '') : ''; };
-    const getById = (id: string) => { const col = clientsDb.columns.find(c => c.id === id); return col ? String(clientRow.cells[col.id] ?? '') : ''; };
-    return { email: get('Email'), phone: get('Phone'), monthly: getById('cc-monthly'), upfront: getById('cc-upfront'), name: get('Name'), notes: get('Notes') };
+    return { email: get('Email'), phone: get('Phone'), name: get('Name'), notes: get('Notes') };
   }, [clientsDb, clientRow]);
 
   // Upfront + monthly from linked projects
@@ -150,14 +149,14 @@ export function ClientPortalView({ company, mode }: { company: string; mode: 'ag
             </span>
             {clientInfo.email && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{clientInfo.email}</span>}
             {clientInfo.phone && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{clientInfo.phone}</span>}
-            {(projectRevenue.upfront + Number(clientInfo.upfront || 0)) > 0 && (
+            {projectRevenue.upfront > 0 && (
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-accent-bright)', fontWeight: 600 }}>
-                €{(projectRevenue.upfront + Number(clientInfo.upfront || 0)).toLocaleString()} one-time
+                €{projectRevenue.upfront.toLocaleString()} one-time
               </span>
             )}
-            {(projectRevenue.monthly + Number(clientInfo.monthly || 0)) > 0 && (
+            {projectRevenue.monthly > 0 && (
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-teal)', fontWeight: 600 }}>
-                €{(projectRevenue.monthly + Number(clientInfo.monthly || 0)).toLocaleString()}/mo
+                €{projectRevenue.monthly.toLocaleString()}/mo
               </span>
             )}
           </div>

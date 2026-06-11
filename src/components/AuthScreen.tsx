@@ -218,14 +218,6 @@ export function AuthScreen() {
         </p>
       )}
 
-      {mode === 'signin' && !isSupabaseConfigured && (
-        <div style={{ marginTop: 18, padding: '10px 12px', borderRadius: 8, background: 'var(--color-bg-active)', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--color-text-secondary)', fontWeight: 600, marginBottom: 3 }}>
-            <IconShieldCheck size={12} /> Demo admin login
-          </div>
-          gbodulica@appercept.net · password <b style={{ color: 'var(--color-text-secondary)' }}>appercept</b>
-        </div>
-      )}
     </Shell>
   );
 }

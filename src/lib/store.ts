@@ -894,7 +894,7 @@ export const useAppStore = create<AppState>()(
       },
     }),
     {
-      name: 'appercept-space-store-v11',
+      name: 'appercept-space-store-v12',
       partialize: (state) => ({
         databases: state.databases,
         pages: state.pages,

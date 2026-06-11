@@ -18,7 +18,7 @@ const GreetingIcon = () => {
   return <IconMoon size={22} style={{ color: '#a78bfa' }} />;
 };
 
-const TODAY = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+const TODAY = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -75,8 +75,18 @@ export default function DashboardPage() {
   const clientRevenue = monthlyRecurring; // recurring monthly shown as the "client revenue" stat
   const { revenue: consultingRevenue, count: consultingCount } = computeConsultingRevenue(consultingDb);
   const { monthlyAvg: clubMonthlyAvg } = computeClubRevenue(clubcrowdDb);
-  // This month's client revenue = upfront (one-time, this month) + recurring monthly
-  const finance = computeCompanyFinance(costsDb, 'Appercept', upfrontThisMonth + monthlyRecurring, consultingRevenue, clubMonthlyAvg);
+
+  // Compute actual monthly club revenue (fee × reservations, no ÷12 averaging) up front
+  // so we can pass the real figure to computeCompanyFinance below.
+  const clubRevenueActual = (() => {
+    const feeC = clubcrowdDb?.columns.find(c => c.name === 'Fee / reservation (€)');
+    const resC = clubcrowdDb?.columns.find(c => c.name === 'Monthly reservations');
+    if (!feeC || !resC) return 0;
+    return (clubcrowdDb?.rows ?? []).reduce((sum, r) => sum + (Number(r.cells[feeC.id]) || 0) * (Number(r.cells[resC.id]) || 0), 0);
+  })();
+
+  // For current-month profit: use actual monthly revenue, not season-averaged.
+  const finance = computeCompanyFinance(costsDb, 'Appercept', upfrontThisMonth + monthlyRecurring, consultingRevenue, clubRevenueActual);
 
   // Diagnostic: what the finance engine sees in the Projects DB
   const projDiag = (() => {

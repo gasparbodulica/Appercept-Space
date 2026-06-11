@@ -258,35 +258,41 @@ export function computeProjectRevenue(projectsDb: Database | undefined): { upfro
   const endCol     = projectsDb.columns.find(c => c.id === 'pc-end'   || c.name === 'End date'   || c.name === 'End');
   const statusCol  = projectsDb.columns.find(c => c.type === 'status');
   const curYM = nowYM();
+
+  // Returns '' if the date string is not a well-formed ISO YYYY-MM-DD, so bad/empty
+  // values are treated as "no date" rather than blocking the calculation.
+  const safeYM = (dateStr: string) => /^\d{4}-\d{2}/.test(dateStr) ? ym(dateStr) : '';
+
   let upfrontThisMonth = 0, monthlyRecurring = 0;
   for (const row of projectsDb.rows) {
     const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
-    const isDone = status === 'Done' || status === 'Completed';
-    if (isDone) continue;
+    if (status === 'Done' || status === 'Completed') continue;
 
-    const startDate = startCol ? String(row.cells[startCol.id] ?? '') : '';
-    const endDate   = endCol   ? String(row.cells[endCol.id]   ?? '') : '';
+    const startRaw = startCol ? String(row.cells[startCol.id] ?? '') : '';
+    const endRaw   = endCol   ? String(row.cells[endCol.id]   ?? '') : '';
+    const startYM  = safeYM(startRaw);
+    const endYM    = safeYM(endRaw);
 
-    // Upfront: counts in THIS month unless a Start date is set to a different month.
+    // Upfront: count in THIS month.
+    //   • No start date (or non-ISO) → always count this month.
+    //   • ISO start date = this month   → count (payment happened this month).
+    //   • ISO start date = past month   → don't count (was already counted then).
+    //   • ISO start date = future month → don't count (hasn't happened yet).
     if (upfrontCol) {
       const upfront = Number(row.cells[upfrontCol.id]) || 0;
-      if (upfront > 0) {
-        const startInCurrentMonth = !startDate || ym(startDate) === curYM;
-        if (startInCurrentMonth) upfrontThisMonth += upfront;
-      }
+      if (upfront > 0 && (!startYM || startYM === curYM)) upfrontThisMonth += upfront;
     }
 
-    // Monthly: counts every month. Stops only when End date is a valid ISO date in a
-    // clearly past month (YYYY-MM-DD format). Malformed / empty / non-ISO values are
-    // treated as "no end date" so nothing breaks if the cell has stray data.
+    // Monthly: count every active month.
+    //   • No start date (or non-ISO) → always count.
+    //   • ISO start date ≤ now        → count (project is running).
+    //   • ISO start date > now        → don't count (project hasn't started).
+    //   • ISO end date < now          → don't count (project has ended).
     if (monthlyCol) {
       const monthly = Number(row.cells[monthlyCol.id]) || 0;
       if (monthly > 0) {
-        const started = !startDate || ym(startDate) <= curYM;
-        // Only stop counting if endDate is a real ISO date (starts with 4 digits + dash)
-        // whose year-month is strictly before the current month.
-        const endYM = endDate && /^\d{4}-\d{2}/.test(endDate) ? ym(endDate) : '';
-        const notEnded = !endYM || endYM >= curYM;
+        const started  = !startYM || startYM <= curYM;
+        const notEnded = !endYM   || endYM   >= curYM;
         if (started && notEnded) monthlyRecurring += monthly;
       }
     }

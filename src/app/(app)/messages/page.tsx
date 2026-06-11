@@ -347,7 +347,7 @@ export default function MessagesPage() {
                       {!grouped && (
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
                           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: mine ? 'var(--color-accent-bright)' : 'var(--color-text-primary)' }}>{u?.name ?? 'Unknown'}{mine && ' (you)'}</span>
-                          <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{new Date(m.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{new Date(m.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
                         </div>
                       )}
                       {m.body && (

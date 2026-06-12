@@ -1,9 +1,17 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Antigravity — Appercept Space',
   description: 'Appercept workspace manager — clients, projects, tasks, meetings and more.',
+};
+
+// Render at the device's real width on phones/tablets instead of a zoomed-out
+// desktop layout — the essential first step for mobile.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

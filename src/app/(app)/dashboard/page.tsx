@@ -70,19 +70,35 @@ export default function DashboardPage() {
   });
 
   // ── Appercept finances: project upfront (this month) + recurring + consulting + club − expenses = profit ──
-  const { upfrontThisMonth, monthlyRecurring } = computeProjectRevenue(projectsDb);
+  const { upfrontThisMonth, monthlyRecurring, forecastUpfront, forecastMonthly } = computeProjectRevenue(projectsDb, clientsDb);
   const { activeCount: clientCount } = computeClientRevenue(clientsDb);
   const clientRevenue = monthlyRecurring; // recurring monthly shown as the "client revenue" stat
   const { revenue: consultingRevenue, count: consultingCount } = computeConsultingRevenue(consultingDb);
   const { monthlyAvg: clubMonthlyAvg } = computeClubRevenue(clubcrowdDb);
 
-  // Compute actual monthly club revenue (fee × reservations, no ÷12 averaging) up front
-  // so we can pass the real figure to computeCompanyFinance below.
+  // Compute actual monthly club revenue (fee × reservations, no ÷12 averaging).
+  // Venues with status "Lead" are excluded from profit and counted as forecast instead.
   const clubRevenueActual = (() => {
-    const feeC = clubcrowdDb?.columns.find(c => c.name === 'Fee / reservation (€)');
-    const resC = clubcrowdDb?.columns.find(c => c.name === 'Monthly reservations');
+    const feeC    = clubcrowdDb?.columns.find(c => c.name === 'Fee / reservation (€)');
+    const resC    = clubcrowdDb?.columns.find(c => c.name === 'Monthly reservations');
+    const statC   = clubcrowdDb?.columns.find(c => c.name === 'Status');
     if (!feeC || !resC) return 0;
-    return (clubcrowdDb?.rows ?? []).reduce((sum, r) => sum + (Number(r.cells[feeC.id]) || 0) * (Number(r.cells[resC.id]) || 0), 0);
+    return (clubcrowdDb?.rows ?? []).reduce((sum, r) => {
+      const st = statC ? String(r.cells[statC.id] ?? '') : '';
+      if (st === 'Lead') return sum; // Lead venues go to forecast, not profit
+      return sum + (Number(r.cells[feeC.id]) || 0) * (Number(r.cells[resC.id]) || 0);
+    }, 0);
+  })();
+  const clubForecastRevenue = (() => {
+    const feeC    = clubcrowdDb?.columns.find(c => c.name === 'Fee / reservation (€)');
+    const resC    = clubcrowdDb?.columns.find(c => c.name === 'Monthly reservations');
+    const statC   = clubcrowdDb?.columns.find(c => c.name === 'Status');
+    if (!feeC || !resC) return 0;
+    return (clubcrowdDb?.rows ?? []).reduce((sum, r) => {
+      const st = statC ? String(r.cells[statC.id] ?? '') : '';
+      if (st !== 'Lead') return sum;
+      return sum + (Number(r.cells[feeC.id]) || 0) * (Number(r.cells[resC.id]) || 0);
+    }, 0);
   })();
 
   // For current-month profit: use actual monthly revenue, not season-averaged.
@@ -284,7 +300,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Appercept finances — revenue minus costs = monthly profit */}
-        <ApperceptFinanceBox f={finance} upfront={upfrontThisMonth} recurring={monthlyRecurring} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} projDiag={projDiag} />
+        <ApperceptFinanceBox f={finance} upfront={upfrontThisMonth} recurring={monthlyRecurring} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} projDiag={projDiag} forecastRevenue={forecastUpfront + forecastMonthly + clubForecastRevenue} />
 
         {/* Financial Overview — synthesised from Balance Sheet + Cash Flow + real costs/revenue */}
         {hasFinancials && (
@@ -702,7 +718,7 @@ function ClubCrowdSnapshot({ yearly, monthly, stages, connected, total, onOpen }
 }
 
 type ProjDiag = { found: boolean; rows: number; upfrontCol: string; monthlyCol: string; sampleUpfront: number; sampleMonthly: number; rowDetails: Array<{ name: string; status: string; startDate: string; endDate: string; upfront: number; monthly: number }> };
-function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCount, onOpenCosts, projDiag }: { f: CompanyFinance; upfront: number; recurring: number; clientCount: number; consultingCount: number; onOpenCosts: () => void; projDiag: ProjDiag }) {
+function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCount, onOpenCosts, projDiag, forecastRevenue }: { f: CompanyFinance; upfront: number; recurring: number; clientCount: number; consultingCount: number; onOpenCosts: () => void; projDiag: ProjDiag; forecastRevenue: number }) {
   const profitPositive = f.profit >= 0;
   const profitColor = profitPositive ? 'var(--color-green)' : 'var(--color-red)';
 
@@ -769,6 +785,12 @@ function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCou
             </div>
             <div style={{ fontSize: 34, fontWeight: 800, color: profitColor, lineHeight: 1 }}>{fmt(f.profit)}</div>
           </div>
+          {forecastRevenue > 0 && (
+            <div style={{ padding: '8px 10px', borderRadius: 7, background: 'rgba(167,139,250,0.08)', border: '0.5px solid rgba(167,139,250,0.2)' }}>
+              <div style={{ fontSize: 10, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Forecast (Leads)</div>
+              <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: '#a78bfa' }}>{fmt(forecastRevenue)}<span style={{ fontSize: 10, fontWeight: 400, marginLeft: 4 }}>if Leads convert</span></div>
+            </div>
+          )}
         </div>
 
         {/* Right: 4-bar chart + category breakdown */}

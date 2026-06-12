@@ -348,7 +348,31 @@ function EditCell({ column, value, onChange, onBlur, onTab, anchorRect }: {
   return <input ref={inputRef} type={column.type === 'email' ? 'email' : column.type === 'phone' ? 'tel' : column.type === 'url' ? 'url' : 'text'} defaultValue={value !== null && value !== undefined ? String(value) : ''} onKeyDown={keyDown} onBlur={e => { onChange(e.target.value || null); onBlur(); }} style={inputStyle} />;
 }
 
-// ─── Date edit cell (extracted so useEffect is at top-level of a component) ───
+// ─── Date edit cell — DD/MM/YYYY text input ───────────────────────────────────
+// Uses a plain text input so users always type in European day-first format.
+// Stores values as ISO YYYY-MM-DD to keep the rest of the system consistent.
+
+function isoToDMY(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
+function dmyToISO(dmy: string): string {
+  const t = dmy.trim();
+  const full = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (full) return `${full[3]}-${full[2].padStart(2, '0')}-${full[1].padStart(2, '0')}`;
+  const short = t.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (short) {
+    const y = new Date().getFullYear();
+    return `${y}-${short[2].padStart(2, '0')}-${short[1].padStart(2, '0')}`;
+  }
+  return t;
+}
+
+function todayDMY(): string {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
 
 function DateEditCell({ value, onChange, onBlur, onTab }: {
   value: CellValue;
@@ -356,31 +380,71 @@ function DateEditCell({ value, onChange, onBlur, onTab }: {
   onBlur: () => void;
   onTab: (shift: boolean) => void;
 }) {
-  const existingVal = value ? String(value).split('|')[0] : '';
+  const rawISO = value ? String(value).split('|')[0] : '';
+  const isRange = value ? String(value).includes('|') : false;
+  const rangeEnd = isRange ? isoToDMY(String(value).split('|')[1] ?? '') : '';
+
+  // Auto-fill today when no existing value — user can clear or change before saving
+  const [fromVal, setFromVal] = useState(rawISO ? isoToDMY(rawISO) : todayDMY());
+  const [toVal,   setToVal]   = useState(rangeEnd);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select(); }, []);
+
+  const save = () => {
+    const from = fromVal.trim();
+    if (!from) { onChange(null); onBlur(); return; }
+    const fromISO = dmyToISO(from);
+    if (isRange && toVal.trim()) {
+      onChange(`${fromISO}|${dmyToISO(toVal.trim())}`);
+    } else {
+      onChange(fromISO);
+    }
+    onBlur();
+  };
 
   const keyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') onBlur();
-    if (e.key === 'Tab') { e.preventDefault(); onTab(e.shiftKey); }
-    if (e.key === 'Enter') onBlur();
+    if (e.key === 'Tab') { e.preventDefault(); save(); onTab(e.shiftKey); }
+    if (e.key === 'Enter') save();
+  };
+
+  const inputStyle: React.CSSProperties = {
+    flex: 1, height: '100%', padding: '0 4px 0 10px',
+    background: 'var(--color-bg-input)', border: 'none', outline: 'none',
+    color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)',
+    fontFamily: 'var(--font-sans)',
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
+    <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%', gap: 2 }}>
       <input
         ref={inputRef}
-        type="date"
-        defaultValue={existingVal}
+        type="text"
+        value={fromVal}
+        onChange={e => setFromVal(e.target.value)}
+        onBlur={save}
         onKeyDown={keyDown}
-        onBlur={e => { onChange(e.target.value || null); onBlur(); }}
-        onChange={e => onChange(e.target.value || null)}
-        style={{ flex: 1, height: '100%', padding: '0 4px 0 10px', background: 'var(--color-bg-input)', border: 'none', outline: 'none', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', fontFamily: 'var(--font-sans)', colorScheme: 'dark' }}
+        placeholder="DD/MM/YYYY"
+        style={inputStyle}
       />
-      {existingVal && (
+      {isRange && (
+        <>
+          <span style={{ fontSize: 10, color: 'var(--color-text-muted)', flexShrink: 0 }}>→</span>
+          <input
+            type="text"
+            value={toVal}
+            onChange={e => setToVal(e.target.value)}
+            onBlur={save}
+            onKeyDown={keyDown}
+            placeholder="DD/MM/YYYY"
+            style={{ ...inputStyle, flex: 1 }}
+          />
+        </>
+      )}
+      {fromVal && (
         <button
-          onMouseDown={e => { e.preventDefault(); onChange(null); onBlur(); }}
+          onMouseDown={e => { e.preventDefault(); setFromVal(''); setToVal(''); onChange(null); onBlur(); }}
           title="Clear date"
           style={{ flexShrink: 0, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', marginRight: 4 }}
           onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-red)')}

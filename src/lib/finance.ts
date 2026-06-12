@@ -238,7 +238,7 @@ export function computeClientRevenue(clientsDb: Database | undefined, projectsDb
       activeCount += 1;
     }
   }
-  const revenue = projectsDb ? computeProjectRevenue(projectsDb).monthlyRecurring : 0;
+  const revenue = projectsDb ? computeProjectRevenue(projectsDb, clientsDb).monthlyRecurring : 0;
   return { revenue: Math.round(revenue), activeCount };
 }
 
@@ -250,54 +250,79 @@ export function computeClientRevenue(clientsDb: Database | undefined, projectsDb
  *                      counts exactly once, in the month it happened.
  *   monthlyRecurring — sum of pc-monthly for all non-completed projects
  */
-export function computeProjectRevenue(projectsDb: Database | undefined): { upfrontThisMonth: number; monthlyRecurring: number } {
-  if (!projectsDb) return { upfrontThisMonth: 0, monthlyRecurring: 0 };
+export function computeProjectRevenue(
+  projectsDb: Database | undefined,
+  clientsDb?: Database,
+): { upfrontThisMonth: number; monthlyRecurring: number; forecastUpfront: number; forecastMonthly: number } {
+  const zero = { upfrontThisMonth: 0, monthlyRecurring: 0, forecastUpfront: 0, forecastMonthly: 0 };
+  if (!projectsDb) return zero;
+
   const upfrontCol = projectsDb.columns.find(c => c.id === 'pc-upfront' || c.name === 'Upfront (€)' || c.name === 'Upfront');
   const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly' || c.name === 'Monthly (€)' || c.name === 'Monthly');
   const startCol   = projectsDb.columns.find(c => c.id === 'pc-start' || c.name === 'Start date' || c.name === 'Start');
   const endCol     = projectsDb.columns.find(c => c.id === 'pc-end'   || c.name === 'End date'   || c.name === 'End');
   const statusCol  = projectsDb.columns.find(c => c.type === 'status');
+  const clientCol  = projectsDb.columns.find(c => c.name === 'Client' || c.id === 'pc-client');
   const curYM = nowYM();
 
-  // Returns '' if the date string is not a well-formed ISO YYYY-MM-DD, so bad/empty
-  // values are treated as "no date" rather than blocking the calculation.
-  const safeYM = (dateStr: string) => /^\d{4}-\d{2}/.test(dateStr) ? ym(dateStr) : '';
+  // Build a map of client company name → status from the Clients DB.
+  const clientStatus: Record<string, string> = {};
+  if (clientsDb && clientCol) {
+    const companyCol = clientsDb.columns.find(c => c.name === 'Company');
+    const cStatusCol = clientsDb.columns.find(c => c.name === 'Status');
+    if (companyCol && cStatusCol) {
+      for (const r of clientsDb.rows) {
+        const name = String(r.cells[companyCol.id] ?? '').toLowerCase().trim();
+        if (name) clientStatus[name] = String(r.cells[cStatusCol.id] ?? '');
+      }
+    }
+  }
 
-  let upfrontThisMonth = 0, monthlyRecurring = 0;
+  const isLeadClient = (row: Row) => {
+    if (!clientCol) return false;
+    const name = String(row.cells[clientCol.id] ?? '').toLowerCase().trim();
+    if (!name) return false;
+    const st = clientStatus[name] ?? Object.entries(clientStatus).find(([k]) => k.includes(name) || name.includes(k))?.[1] ?? '';
+    return st === 'Lead';
+  };
+
+  // Only apply ISO date filter — non-ISO (e.g. empty, DD/MM/YYYY) → treated as "no date".
+  const safeYM = (s: string) => /^\d{4}-\d{2}/.test(s) ? ym(s) : '';
+
+  let upfrontThisMonth = 0, monthlyRecurring = 0, forecastUpfront = 0, forecastMonthly = 0;
+
   for (const row of projectsDb.rows) {
     const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
     if (status === 'Done' || status === 'Completed') continue;
 
-    const startRaw = startCol ? String(row.cells[startCol.id] ?? '') : '';
-    const endRaw   = endCol   ? String(row.cells[endCol.id]   ?? '') : '';
-    const startYM  = safeYM(startRaw);
-    const endYM    = safeYM(endRaw);
+    const startYM = safeYM(startCol ? String(row.cells[startCol.id] ?? '') : '');
+    const endYM   = safeYM(endCol   ? String(row.cells[endCol.id]   ?? '') : '');
+    const lead    = isLeadClient(row);
 
-    // Upfront: count in THIS month.
-    //   • No start date (or non-ISO) → always count this month.
-    //   • ISO start date = this month   → count (payment happened this month).
-    //   • ISO start date = past month   → don't count (was already counted then).
-    //   • ISO start date = future month → don't count (hasn't happened yet).
-    if (upfrontCol) {
-      const upfront = Number(row.cells[upfrontCol.id]) || 0;
-      if (upfront > 0 && (!startYM || startYM === curYM)) upfrontThisMonth += upfront;
-    }
+    const upfront = upfrontCol ? (Number(row.cells[upfrontCol.id]) || 0) : 0;
+    const monthly = monthlyCol ? (Number(row.cells[monthlyCol.id]) || 0) : 0;
 
-    // Monthly: count every active month.
-    //   • No start date (or non-ISO) → always count.
-    //   • ISO start date ≤ now        → count (project is running).
-    //   • ISO start date > now        → don't count (project hasn't started).
-    //   • ISO end date < now          → don't count (project has ended).
-    if (monthlyCol) {
-      const monthly = Number(row.cells[monthlyCol.id]) || 0;
-      if (monthly > 0) {
-        const started  = !startYM || startYM <= curYM;
-        const notEnded = !endYM   || endYM   >= curYM;
-        if (started && notEnded) monthlyRecurring += monthly;
-      }
+    // Upfront: count in the start month (or this month if no ISO start date).
+    const upfrontCountsNow = upfront > 0 && (!startYM || startYM === curYM);
+    // Monthly: count when project is running (started, not ended).
+    const started  = !startYM || startYM <= curYM;
+    const notEnded = !endYM   || endYM   >= curYM;
+    const monthlyCountsNow = monthly > 0 && started && notEnded;
+
+    if (lead) {
+      if (upfrontCountsNow) forecastUpfront += upfront;
+      if (monthlyCountsNow) forecastMonthly += monthly;
+    } else {
+      if (upfrontCountsNow) upfrontThisMonth += upfront;
+      if (monthlyCountsNow) monthlyRecurring += monthly;
     }
   }
-  return { upfrontThisMonth: Math.round(upfrontThisMonth), monthlyRecurring: Math.round(monthlyRecurring) };
+  return {
+    upfrontThisMonth: Math.round(upfrontThisMonth),
+    monthlyRecurring: Math.round(monthlyRecurring),
+    forecastUpfront:  Math.round(forecastUpfront),
+    forecastMonthly:  Math.round(forecastMonthly),
+  };
 }
 
 /** Effective total of a company's costs for the current month (all frequencies). */

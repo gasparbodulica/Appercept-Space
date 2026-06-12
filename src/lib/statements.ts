@@ -30,12 +30,22 @@ export function computePL(databases: Record<string, Database>, pages: Page[]): P
   const clubcrowdDb  = dbBySlug(databases, pages, 'clubcrowd');
   const costsDb = findCostsDb(databases);
 
-  const { upfrontThisMonth, monthlyRecurring } = computeProjectRevenue(projectsDb);
-  const retainers = computeClientRevenue(clientsDb).revenue; // manual cc-monthly retainers
+  const { upfrontThisMonth, monthlyRecurring } = computeProjectRevenue(projectsDb, clientsDb);
+  const retainers = computeClientRevenue(clientsDb).revenue;
   const consulting = computeConsultingRevenue(consultingDb).revenue;
-  const clubs = computeClubRevenue(clubcrowdDb).monthlyAvg;
+  // Use actual monthly club revenue (not season-averaged) for the P&L statement.
+  const feeC  = clubcrowdDb?.columns.find(c => c.name === 'Fee / reservation (€)');
+  const resC  = clubcrowdDb?.columns.find(c => c.name === 'Monthly reservations');
+  const statC = clubcrowdDb?.columns.find(c => c.name === 'Status');
+  const clubs = (feeC && resC)
+    ? (clubcrowdDb?.rows ?? []).reduce((s, r) => {
+        const st = statC ? String(r.cells[statC.id] ?? '') : '';
+        if (st === 'Lead') return s;
+        return s + (Number(r.cells[feeC.id]) || 0) * (Number(r.cells[resC.id]) || 0);
+      }, 0)
+    : 0;
   const totalRevenue = upfrontThisMonth + monthlyRecurring + retainers + consulting + clubs;
-  const fin = computeCompanyFinance(costsDb, 'Appercept', retainers + monthlyRecurring, consulting, clubs);
+  const fin = computeCompanyFinance(costsDb, 'Appercept', upfrontThisMonth + retainers + monthlyRecurring, consulting, clubs);
 
   const revenueLines: MoneyLine[] = [
     { label: 'Project upfronts (this month)', amount: upfrontThisMonth, color: 'var(--color-accent-bright)' },

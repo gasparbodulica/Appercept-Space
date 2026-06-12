@@ -1117,6 +1117,20 @@ export const useAppStore = create<AppState>()(
           }
         }
 
+        // Costs status → exactly Active / Past (drives whether a cost is still paid).
+        const costsDbM = mergedDatabases['db-costs'];
+        if (costsDbM) {
+          const seedCostStatus = DATABASES['db-costs'].columns.find((c) => c.id === 'costc-status');
+          const costStatus = costsDbM.columns.find((c) => c.id === 'costc-status');
+          const labels = costStatus?.config.options?.map((o) => o.label).sort().join(',') ?? '';
+          if (costStatus && seedCostStatus && labels !== 'Active,Past') {
+            mergedDatabases['db-costs'] = {
+              ...costsDbM,
+              columns: costsDbM.columns.map((c) => (c.id === 'costc-status' ? { ...c, config: seedCostStatus.config } : c)),
+            };
+          }
+        }
+
         // Add the 'Operating season' column if missing, defaulting existing rows
         // to Year-round (needed to calculate real yearly revenue per club).
         if (ccDb && !ccDb.columns.some((c) => c.id === 'clc-season')) {

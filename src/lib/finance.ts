@@ -23,26 +23,80 @@ export interface CompanyFinance {
  * Each club's yearly revenue = fee × monthly reservations × active months;
  * we divide the total by 12 to get a fair recurring monthly contribution.
  */
+/** How many months a season label represents. */
+function parseSeasonMonths(label: string): number {
+  if (!label || /year.?round|12/i.test(label)) return 12;
+  const m = label.match(/(\d+)/);
+  return m ? Math.min(12, Math.max(1, Number(m[1]))) : 12;
+}
+
+/**
+ * Whether a venue is currently operating, given its season label and the current month (1-12).
+ *   Year-round  → always
+ *   9 months    → March–November
+ *   6 months    → April–September
+ *   Summer/3mo  → June–August
+ *   Winter      → December–February
+ * Any other label falls back to parsing the month count and guessing summer for short seasons.
+ */
+function isVenueInSeason(label: string, month: number): boolean {
+  const l = (label || '').toLowerCase();
+  if (!l || /year.?round|12/i.test(l)) return true;
+  if (/9\s*mo/i.test(l)) return month >= 3 && month <= 11;
+  if (/6\s*mo/i.test(l)) return month >= 4 && month <= 9;
+  if (/summer|3\s*mo/i.test(l)) return month >= 6 && month <= 8;
+  if (/winter/i.test(l)) return month === 12 || month <= 2;
+  if (/spring/i.test(l)) return month >= 3 && month <= 5;
+  if (/fall|autumn/i.test(l)) return month >= 9 && month <= 11;
+  // Parse number of months, assume summer-centred for short seasons
+  const mo = parseSeasonMonths(l);
+  if (mo >= 9) return month >= 3 && month <= 11;
+  if (mo >= 6) return month >= 4 && month <= 9;
+  return month >= 6 && month <= 8; // short → summer
+}
+
+/**
+ * Season-aware club revenue for the CURRENT month:
+ *   active   — fee × res for Active/Onboarding venues that are currently in season
+ *   forecast — full seasonal revenue (fee × res × season months) for Lead venues
+ *   venueCount — number of active in-season venues
+ * Used for both the home profit and the Forecast page so they stay in sync.
+ */
+export function computeClubCurrentMonth(clubcrowdDb: Database | undefined): { active: number; forecast: number; venueCount: number } {
+  if (!clubcrowdDb) return { active: 0, forecast: 0, venueCount: 0 };
+  const feeC    = clubcrowdDb.columns.find(c => c.name === 'Fee / reservation (€)');
+  const resC    = clubcrowdDb.columns.find(c => c.name === 'Monthly reservations');
+  const statC   = clubcrowdDb.columns.find(c => c.name === 'Status');
+  const seasonC = clubcrowdDb.columns.find(c => c.name === 'Operating season');
+  if (!feeC || !resC) return { active: 0, forecast: 0, venueCount: 0 };
+  const currentMonth = new Date().getMonth() + 1;
+  let active = 0, forecast = 0, venueCount = 0;
+  for (const row of clubcrowdDb.rows) {
+    const monthly = (Number(row.cells[feeC.id]) || 0) * (Number(row.cells[resC.id]) || 0);
+    if (!monthly) continue;
+    const st          = statC   ? String(row.cells[statC.id]   ?? '') : '';
+    const seasonLabel = seasonC ? String(row.cells[seasonC.id] ?? '') : '';
+    if (st === 'Active' || st === 'Onboarding') {
+      if (isVenueInSeason(seasonLabel, currentMonth)) { active += monthly; venueCount++; }
+    } else if (st === 'Lead') {
+      forecast += monthly * parseSeasonMonths(seasonLabel);
+    }
+    // Past → excluded from both
+  }
+  return { active: Math.round(active), forecast: Math.round(forecast), venueCount };
+}
+
 export function computeClubRevenue(clubcrowdDb: Database | undefined): { monthlyAvg: number; yearly: number; venueCount: number } {
   if (!clubcrowdDb) return { monthlyAvg: 0, yearly: 0, venueCount: 0 };
   const feeCol    = clubcrowdDb.columns.find(c => c.name === 'Fee / reservation (€)');
   const resCol    = clubcrowdDb.columns.find(c => c.name === 'Monthly reservations');
   const seasonCol = clubcrowdDb.columns.find(c => c.name === 'Operating season');
   if (!feeCol || !resCol) return { monthlyAvg: 0, yearly: 0, venueCount: 0 };
-  const months = (label: string): number => {
-    if (!label) return 12;
-    if (/year|12/i.test(label)) return 12;
-    const m = label.match(/(\d+)/);
-    return m ? Number(m[1]) : 12;
-  };
-  let yearly = 0;
-  let venueCount = 0;
+  let yearly = 0, venueCount = 0;
   for (const row of clubcrowdDb.rows) {
-    const fee = Number(row.cells[feeCol.id]) || 0;
-    const res = Number(row.cells[resCol.id]) || 0;
-    const monthly = fee * res;
+    const monthly = (Number(row.cells[feeCol.id]) || 0) * (Number(row.cells[resCol.id]) || 0);
     if (monthly > 0) venueCount += 1;
-    const mo = seasonCol ? months(String(row.cells[seasonCol.id] ?? '')) : 12;
+    const mo = seasonCol ? parseSeasonMonths(String(row.cells[seasonCol.id] ?? '')) : 12;
     yearly += monthly * mo;
   }
   return { monthlyAvg: Math.round(yearly / 12), yearly: Math.round(yearly), venueCount };

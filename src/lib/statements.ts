@@ -1,7 +1,8 @@
 import { Database, Page } from './types';
 import {
   computeClientRevenue, computeConsultingRevenue, computeClubRevenue,
-  computeCompanyFinance, computeProjectRevenue, findCostsDb, findClientsDb,
+  computeCompanyFinance, computeProjectRevenue, computeClubCurrentMonth,
+  findCostsDb, findClientsDb,
 } from './finance';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -33,17 +34,8 @@ export function computePL(databases: Record<string, Database>, pages: Page[]): P
   const { upfrontThisMonth, monthlyRecurring } = computeProjectRevenue(projectsDb, clientsDb);
   const retainers = computeClientRevenue(clientsDb).revenue;
   const consulting = computeConsultingRevenue(consultingDb).revenue;
-  // Use actual monthly club revenue (not season-averaged) for the P&L statement.
-  const feeC  = clubcrowdDb?.columns.find(c => c.name === 'Fee / reservation (€)');
-  const resC  = clubcrowdDb?.columns.find(c => c.name === 'Monthly reservations');
-  const statC = clubcrowdDb?.columns.find(c => c.name === 'Status');
-  const clubs = (feeC && resC)
-    ? (clubcrowdDb?.rows ?? []).reduce((s, r) => {
-        const st = statC ? String(r.cells[statC.id] ?? '') : '';
-        if (st === 'Lead') return s;
-        return s + (Number(r.cells[feeC.id]) || 0) * (Number(r.cells[resC.id]) || 0);
-      }, 0)
-    : 0;
+  // P&L clubs = in-season Active/Onboarding venues this month (same as home profit).
+  const { active: clubs } = computeClubCurrentMonth(clubcrowdDb);
   const totalRevenue = upfrontThisMonth + monthlyRecurring + retainers + consulting + clubs;
   const fin = computeCompanyFinance(costsDb, 'Appercept', upfrontThisMonth + retainers + monthlyRecurring, consulting, clubs);
 
@@ -197,21 +189,10 @@ export function computeForecast(databases: Record<string, Database>, pages: Page
   const consultingDb = dbBySlug(databases, pages, 'consulting');
   const costsDb = findCostsDb(databases);
 
-  // Club: actual monthly revenue from Active/Onboarding venues (fee × reservations),
-  // NOT the ÷12 season average — that was causing Lead venue revenue to be understated.
-  const feeC    = clubcrowdDb?.columns.find(c => c.name === 'Fee / reservation (€)');
-  const resC    = clubcrowdDb?.columns.find(c => c.name === 'Monthly reservations');
-  const statC   = clubcrowdDb?.columns.find(c => c.name === 'Status');
-  const clubMonthlyActual = (feeC && resC)
-    ? (clubcrowdDb?.rows ?? []).reduce((s, r) => {
-        const st = statC ? String(r.cells[statC.id] ?? '') : '';
-        if (st === 'Lead' || st === 'Past') return s; // exclude: lead = forecast, past = archived
-        return s + (Number(r.cells[feeC.id]) || 0) * (Number(r.cells[resC.id]) || 0);
-      }, 0)
-    : 0;
+  // Season-aware club revenue: only Active/Onboarding venues that are currently in season.
+  const { active: clubMonthlyActual } = computeClubCurrentMonth(clubcrowdDb);
 
-  // Recurring revenue = project monthly (via computeClientRevenue) + actual club monthly.
-  // computeClientRevenue(clientsDb, projectsDb).revenue = project recurring for non-Lead/non-Past clients.
+  // Recurring revenue = project monthly + in-season club monthly.
   const baseRevenue = computeClientRevenue(clientsDb, projectsDb).revenue + clubMonthlyActual;
   // + your predicted monthly consulting (editable)
   const monthlyRevenue = baseRevenue + (a.monthlyConsulting || 0);

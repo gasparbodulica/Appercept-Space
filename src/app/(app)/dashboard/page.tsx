@@ -6,7 +6,7 @@ import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { USERS } from '@/lib/seed';
 import { Topbar } from '@/components/layout/Topbar';
 import { WeatherWidget } from '@/components/WeatherWidget';
-import { computeCompanyFinance, computeClientRevenue, computeConsultingRevenue, computeClubRevenue, computeProjectRevenue, type CompanyFinance } from '@/lib/finance';
+import { computeCompanyFinance, computeClientRevenue, computeConsultingRevenue, computeClubRevenue, computeProjectRevenue, computeClubCurrentMonth, type CompanyFinance } from '@/lib/finance';
 import { TeamCapacityHeatmap } from '@/components/TeamCapacityHeatmap';
 import { WorldClocks } from '@/components/WorldClocks';
 import { IconCircleCheck, IconCircleFilled, IconCalendar, IconFileText, IconCurrencyEuro, IconSun, IconSunset, IconMoon, IconTrendingUp, IconTrendingDown, IconBuildingFactory2, IconAlertTriangle, IconMusic, IconChevronRight, IconBrandStripe, IconWallet, IconScale, IconArrowsExchange, IconClockHour4 } from '@tabler/icons-react';
@@ -77,39 +77,9 @@ export default function DashboardPage() {
   const { revenue: consultingRevenue, count: consultingCount } = computeConsultingRevenue(consultingDb);
   const { monthlyAvg: clubMonthlyAvg } = computeClubRevenue(clubcrowdDb);
 
-  // Compute actual monthly club revenue (fee × reservations, no ÷12 averaging).
-  // Venues with status "Lead" are excluded from profit and counted as forecast instead.
-  const clubRevenueActual = (() => {
-    const feeC    = clubcrowdDb?.columns.find(c => c.name === 'Fee / reservation (€)');
-    const resC    = clubcrowdDb?.columns.find(c => c.name === 'Monthly reservations');
-    const statC   = clubcrowdDb?.columns.find(c => c.name === 'Status');
-    if (!feeC || !resC) return 0;
-    return (clubcrowdDb?.rows ?? []).reduce((sum, r) => {
-      const st = statC ? String(r.cells[statC.id] ?? '') : '';
-      if (st === 'Lead' || st === 'Past') return sum; // Lead/Past excluded from current profit
-      return sum + (Number(r.cells[feeC.id]) || 0) * (Number(r.cells[resC.id]) || 0);
-    }, 0);
-  })();
-  // Club forecast = YEARLY potential of Lead venues (fee × res × operating months),
-  // matching the "Real yearly revenue" figure shown in the ClubCrowd snapshot.
-  const clubForecastRevenue = (() => {
-    const feeC    = clubcrowdDb?.columns.find(c => c.name === 'Fee / reservation (€)');
-    const resC    = clubcrowdDb?.columns.find(c => c.name === 'Monthly reservations');
-    const statC   = clubcrowdDb?.columns.find(c => c.name === 'Status');
-    const seasonC = clubcrowdDb?.columns.find(c => c.name === 'Operating season');
-    if (!feeC || !resC) return 0;
-    const seasonMonths = (label: string) => {
-      if (!label || /year|12/i.test(label)) return 12;
-      const m = label.match(/(\d+)/); return m ? Number(m[1]) : 12;
-    };
-    return (clubcrowdDb?.rows ?? []).reduce((sum, r) => {
-      const st = statC ? String(r.cells[statC.id] ?? '') : '';
-      if (st !== 'Lead') return sum;
-      const monthly = (Number(r.cells[feeC.id]) || 0) * (Number(r.cells[resC.id]) || 0);
-      const months  = seasonC ? seasonMonths(String(r.cells[seasonC.id] ?? '')) : 12;
-      return sum + monthly * months; // full seasonal revenue, same as ClubCrowd snapshot
-    }, 0);
-  })();
+  // Season-aware club revenue: active = in-season Active/Onboarding venues this month;
+  // forecast = full seasonal potential of Lead venues (fee × res × season months).
+  const { active: clubRevenueActual, forecast: clubForecastRevenue } = computeClubCurrentMonth(clubcrowdDb);
 
   // For current-month profit: use actual monthly revenue, not season-averaged.
   const finance = computeCompanyFinance(costsDb, 'Appercept', upfrontThisMonth + monthlyRecurring, consultingRevenue, clubRevenueActual);

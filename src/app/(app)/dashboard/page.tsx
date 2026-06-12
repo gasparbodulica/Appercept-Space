@@ -900,7 +900,6 @@ function RevenueHistoryChart({ snapshots, liveEntry }: { snapshots: Snapshot[]; 
               style={{
                 flex: '0 0 auto', minWidth: 54, display: 'flex', flexDirection: 'column',
                 alignItems: 'center', gap: 5, cursor: 'default', position: 'relative',
-                opacity: hoveredYM && !isHov ? 0.35 : 1, transition: 'opacity 100ms',
               }}
             >
               {/* Tooltip */}
@@ -910,7 +909,7 @@ function RevenueHistoryChart({ snapshots, liveEntry }: { snapshots: Snapshot[]; 
                   transform: 'translateX(-50%)', marginBottom: 10, zIndex: 300,
                   background: 'var(--color-bg-surface)', border: '0.5px solid var(--color-border-default)',
                   borderRadius: 10, padding: '10px 14px',
-                  boxShadow: '0 12px 36px rgba(0,0,0,0.65)',
+                  boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
                   minWidth: 155, pointerEvents: 'none', whiteSpace: 'nowrap',
                 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 7 }}>{s.label}</div>

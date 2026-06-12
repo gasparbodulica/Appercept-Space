@@ -1172,7 +1172,14 @@ export const useAppStore = create<AppState>()(
           accounts: (() => {
             const demo = new Set(REMOVED_DEMO_EMAILS.map((e) => e.toLowerCase()));
             const base = [
-              ...ACCOUNTS.map((sa) => persistedAccounts.find((pa) => pa.id === sa.id) ?? sa),
+              // For seed accounts (incl. the admin), keep any persisted edits like name/
+              // avatar, but ALWAYS force the seed password, role and approval — so the
+              // built-in admin can always log in with the seed credentials even if an old
+              // store had a different password saved.
+              ...ACCOUNTS.map((sa) => {
+                const pa = persistedAccounts.find((pa) => pa.id === sa.id);
+                return pa ? { ...pa, password: sa.password, role: sa.role, approved: sa.approved } : sa;
+              }),
               ...persistedAccounts.filter((pa) => !ACCOUNTS.some((sa) => sa.id === pa.id)),
             ].filter((a) => !demo.has(a.email.toLowerCase()));
             const byEmail = new Map<string, typeof base[number]>();

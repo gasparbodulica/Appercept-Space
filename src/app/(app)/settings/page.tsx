@@ -622,20 +622,22 @@ from auth.users u
 left join public.profiles p on p.id = u.id
 where p.id is null;
 
--- 3. Let any signed-in user READ all profiles (so the admin list loads)
+-- 3. Let the app READ all profiles so the admin approval list loads.
+--    Includes "anon" because the built-in admin logs in locally (no Supabase
+--    session), so its requests reach Supabase as the anonymous role.
 drop policy if exists "read all profiles" on public.profiles;
-create policy "read all profiles" on public.profiles for select to authenticated using (true);
+create policy "read all profiles" on public.profiles for select to anon, authenticated using (true);
 
--- 4. Let admins UPDATE any profile (approve / role / company)
+-- 4. Let the app UPDATE profiles (approve / role / company) for the same reason.
 drop policy if exists "admins update profiles" on public.profiles;
-create policy "admins update profiles" on public.profiles for update to authenticated
-  using ( (select role from public.profiles p where p.id = auth.uid()) = 'admin' )
-  with check ( true );
-
--- 5. Let users update their OWN profile (invite-link auto-approval)
 drop policy if exists "users update own profile" on public.profiles;
-create policy "users update own profile" on public.profiles for update to authenticated
-  using ( auth.uid() = id ) with check ( true );`;
+create policy "app update profiles" on public.profiles for update to anon, authenticated
+  using ( true ) with check ( true );
+
+-- 5. Let the app INSERT profiles (needed if a sign-up's trigger didn't fire).
+drop policy if exists "app insert profiles" on public.profiles;
+create policy "app insert profiles" on public.profiles for insert to anon, authenticated
+  with check ( true );`;
 
   const copySql = () => {
     navigator.clipboard.writeText(rlsSql).then(() => {

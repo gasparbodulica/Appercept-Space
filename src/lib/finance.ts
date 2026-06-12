@@ -120,6 +120,7 @@ interface CostCols {
   dateCol?: { id: string };
   freqCol?: { id: string };
   categoryCol?: { id: string };
+  statusCol?: { id: string };
 }
 
 function costColumns(costsDb: Database): CostCols {
@@ -129,20 +130,32 @@ function costColumns(costsDb: Database): CostCols {
     dateCol: costsDb.columns.find(c => c.type === 'date' || c.type === 'date_range'),
     freqCol: costsDb.columns.find(c => c.name === 'Frequency'),
     categoryCol: costsDb.columns.find(c => c.name === 'Category'),
+    statusCol: costsDb.columns.find(c => c.name === 'Status' || c.type === 'status'),
   };
+}
+
+// A cost status that means "we no longer pay this" — stop counting it.
+function isStoppedCostStatus(status: string): boolean {
+  return /^(past|cancell?ed|inactive|stopped|ended|paused|done)$/i.test(status.trim());
 }
 
 /**
  * The amount this cost row contributes to the CURRENT month's expenses,
- * honouring its billing frequency:
+ * honouring its billing frequency AND its status:
  *   • One-time → full amount only in the month it is dated
  *   • Monthly  → full amount every month from its start date onward
  *   • Yearly   → amortised (amount ÷ 12) every month from its start date onward
+ * A cost whose Status is Past / Cancelled / Inactive / Stopped / Ended is no
+ * longer being paid, so it contributes 0 (we stopped using it).
  */
 export function effectiveMonthlyCost(row: Row, cols: CostCols, currentYM: string): number {
   if (!cols.amountCol || !cols.dateCol) return 0;
   const amt = Number(row.cells[cols.amountCol.id]) || 0;
   if (!amt) return 0;
+
+  // Status gate — stopped costs don't count anymore.
+  const status = cols.statusCol ? String(row.cells[cols.statusCol.id] ?? '') : '';
+  if (status && isStoppedCostStatus(status)) return 0;
 
   const dateVal = row.cells[cols.dateCol.id];
   const startYM = dateVal ? ym(String(dateVal)) : null;

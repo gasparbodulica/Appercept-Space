@@ -32,6 +32,19 @@ interface AppState {
   portalReadAt: Record<string, string>; // clientName → ISO timestamp last read by team
   portalColors: Record<string, string>; // company name → custom accent colour
 
+  // Monthly revenue snapshots — saved once per month when the dashboard loads.
+  revenueSnapshots: Array<{
+    ym: string;       // 'YYYY-MM'
+    label: string;    // 'June 2026'
+    upfront: number;
+    monthly: number;
+    clubs: number;
+    consulting: number;
+    costs: number;
+    profit: number;
+    forecastRevenue: number;
+  }>;
+
   // Revenue sharing
   teamRoles: TeamRole[];
   projectShares: ProjectShare[];
@@ -116,6 +129,7 @@ interface AppState {
   generateInviteLink: () => string;
   revokeInviteLink: (token: string) => void;
   consumeInviteLink: (token: string) => boolean;
+  saveRevenueSnapshot: (snap: AppState['revenueSnapshots'][number]) => void;
   changePassword: (currentPassword: string, newPassword: string) => { ok: boolean; error?: string };
   resetPassword: (email: string, newPassword: string) => { ok: boolean; error?: string };
   // Email-code reset flow
@@ -192,6 +206,7 @@ export const useAppStore = create<AppState>()(
       authChecked: !isSupabaseConfigured,
       pendingInvites: [],
       inviteLinks: [],
+      revenueSnapshots: [],
       channels: CHANNELS,
       chatMessages: CHAT_MESSAGES,
       portalMessages: PORTAL_MESSAGES,
@@ -597,6 +612,10 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ inviteLinks: s.inviteLinks.map(l => l.token === token ? { ...l, usedCount: l.usedCount + 1 } : l) }));
         return true;
       },
+      saveRevenueSnapshot: (snap) => set((s) => {
+        const existing = s.revenueSnapshots.filter(r => r.ym !== snap.ym);
+        return { revenueSnapshots: [...existing, snap].sort((a, b) => a.ym.localeCompare(b.ym)).slice(-18) };
+      }),
 
       changePassword: (currentPassword, newPassword) => {
         const acc = get().accounts.find((a) => a.id === get().sessionAccountId);
@@ -960,6 +979,7 @@ export const useAppStore = create<AppState>()(
         currentUserId: state.currentUserId,
         pendingInvites: state.pendingInvites,
         inviteLinks: state.inviteLinks,
+        revenueSnapshots: state.revenueSnapshots,
       }),
       // Always merge seed databases & pages over persisted data so new
       // entries added in seed.ts are never silently missing after a deploy.
@@ -1167,6 +1187,7 @@ export const useAppStore = create<AppState>()(
           sessionAccountId: p.sessionAccountId ?? null,
           pendingInvites: p.pendingInvites ?? [],
           inviteLinks: p.inviteLinks ?? [],
+          revenueSnapshots: p.revenueSnapshots ?? [],
           // Pre-mark seed portal clients as read so demo messages never show as
           // unread on a fresh install. Persisted read-stamps win if they exist.
           portalReadAt: (() => {

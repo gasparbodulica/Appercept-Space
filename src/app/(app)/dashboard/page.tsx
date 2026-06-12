@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { USERS } from '@/lib/seed';
 import { Topbar } from '@/components/layout/Topbar';
@@ -22,7 +23,7 @@ const TODAY = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'nu
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { databases, pages, users, activities, comments } = useAppStore();
+  const { databases, pages, users, activities, comments, saveRevenueSnapshot, revenueSnapshots } = useAppStore();
   // The greeting follows the signed-in person (real account), not a seed constant.
   const account = useCurrentAccount();
   const currentUser = account ?? users[0] ?? USERS[0];
@@ -85,7 +86,7 @@ export default function DashboardPage() {
     if (!feeC || !resC) return 0;
     return (clubcrowdDb?.rows ?? []).reduce((sum, r) => {
       const st = statC ? String(r.cells[statC.id] ?? '') : '';
-      if (st === 'Lead') return sum; // Lead venues go to forecast, not profit
+      if (st === 'Lead' || st === 'Past') return sum; // Lead/Past excluded from current profit
       return sum + (Number(r.cells[feeC.id]) || 0) * (Number(r.cells[resC.id]) || 0);
     }, 0);
   })();
@@ -103,6 +104,23 @@ export default function DashboardPage() {
 
   // For current-month profit: use actual monthly revenue, not season-averaged.
   const finance = computeCompanyFinance(costsDb, 'Appercept', upfrontThisMonth + monthlyRecurring, consultingRevenue, clubRevenueActual);
+
+  // Save a monthly snapshot once per month so history chart builds up over time.
+  const curYM = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  useEffect(() => {
+    saveRevenueSnapshot({
+      ym: curYM,
+      label: finance.monthLabel + ' ' + new Date().getFullYear(),
+      upfront: upfrontThisMonth,
+      monthly: monthlyRecurring,
+      clubs: clubRevenueActual,
+      consulting: consultingRevenue,
+      costs: finance.expenses,
+      profit: finance.profit,
+      forecastRevenue: forecastUpfront + forecastMonthly + clubForecastRevenue,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curYM]);
 
   // Diagnostic: what the finance engine sees in the Projects DB
   const projDiag = (() => {
@@ -182,7 +200,6 @@ export default function DashboardPage() {
   const cfAmountCol   = cashflowDb?.columns.find((c) => c.name === 'Amount');
   const cfDateCol     = cashflowDb?.columns.find((c) => c.type === 'date');
   const cfActivityCol = cashflowDb?.columns.find((c) => c.name === 'Activity');
-  const curYM = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 
   const operatingIn = finance.totalRevenue;   // real revenue this month
   const operatingOut = finance.expenses;      // real costs this month
@@ -301,6 +318,9 @@ export default function DashboardPage() {
 
         {/* Appercept finances — revenue minus costs = monthly profit */}
         <ApperceptFinanceBox f={finance} upfront={upfrontThisMonth} recurring={monthlyRecurring} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} projDiag={projDiag} forecastRevenue={forecastUpfront + forecastMonthly + clubForecastRevenue} />
+
+        {/* Revenue history chart — builds up month by month */}
+        {revenueSnapshots.length > 0 && <RevenueHistoryChart snapshots={revenueSnapshots} />}
 
         {/* Financial Overview — synthesised from Balance Sheet + Cash Flow + real costs/revenue */}
         {hasFinancials && (
@@ -827,6 +847,85 @@ function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCou
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+type Snapshot = { ym: string; label: string; upfront: number; monthly: number; clubs: number; consulting: number; costs: number; profit: number; forecastRevenue: number };
+
+function RevenueHistoryChart({ snapshots }: { snapshots: Snapshot[] }) {
+  const sorted = [...snapshots].sort((a, b) => a.ym.localeCompare(b.ym)).slice(-12);
+  if (sorted.length === 0) return null;
+  const maxVal = Math.max(1, ...sorted.map(s => Math.max(s.upfront + s.monthly + s.clubs + s.consulting, s.costs)));
+
+  return (
+    <div style={{
+      background: 'var(--color-bg-elevated)', border: '0.5px solid var(--color-border-default)',
+      borderRadius: 'var(--card-radius)', padding: '20px 24px', marginBottom: 40,
+      boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+        <div>
+          <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Revenue history</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Monthly performance — builds up as you use the app</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: 'var(--color-text-muted)' }}>
+          {[
+            { color: 'rgba(0,210,255,0.7)', label: 'One-time' },
+            { color: 'rgba(45,212,191,0.7)', label: 'Recurring' },
+            { color: 'rgba(99,91,255,0.7)', label: 'Clubs' },
+            { color: 'rgba(255,79,106,0.6)', label: 'Costs' },
+          ].map(l => (
+            <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: l.color, display: 'block' }} />{l.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 140, overflowX: 'auto', paddingBottom: 4 }}>
+        {sorted.map((s) => {
+          const rev = s.upfront + s.monthly + s.clubs + s.consulting;
+          const profitColor = s.profit >= 0 ? 'var(--color-green)' : 'var(--color-red)';
+          const barH = (v: number) => `${Math.max(2, (v / maxVal) * 120)}px`;
+          const isCurrent = s.ym === sorted[sorted.length - 1].ym;
+          return (
+            <div key={s.ym} style={{ flex: '0 0 auto', minWidth: 54, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              {/* Profit number */}
+              <div style={{ fontSize: 9, fontWeight: 700, color: profitColor }}>{fmt(s.profit)}</div>
+              {/* Stacked bar: upfront + monthly + clubs, costs side by side */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 120 }}>
+                {/* Revenue bar (stacked) */}
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: 18 }}>
+                  {s.clubs > 0 && <div style={{ width: '100%', height: barH(s.clubs), background: 'rgba(99,91,255,0.7)', borderRadius: '2px 2px 0 0' }} />}
+                  {s.monthly > 0 && <div style={{ width: '100%', height: barH(s.monthly), background: 'rgba(45,212,191,0.7)' }} />}
+                  {s.upfront > 0 && <div style={{ width: '100%', height: barH(s.upfront), background: 'rgba(0,210,255,0.7)', borderRadius: s.monthly === 0 && s.clubs === 0 ? '2px 2px 0 0' : 0 }} />}
+                </div>
+                {/* Costs bar */}
+                {s.costs > 0 && (
+                  <div style={{ width: 10, height: barH(s.costs), background: 'rgba(255,79,106,0.6)', borderRadius: '2px 2px 0 0', alignSelf: 'flex-end' }} />
+                )}
+              </div>
+              {/* Month label */}
+              <div style={{ fontSize: 9, color: isCurrent ? 'var(--color-accent-bright)' : 'var(--color-text-muted)', fontWeight: isCurrent ? 700 : 400, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {s.label.slice(0, 3)} {s.ym.slice(0, 4)}
+              </div>
+              {isCurrent && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--color-accent)' }} />}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Forecast row */}
+      {sorted.some(s => s.forecastRevenue > 0) && (
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '0.5px solid var(--color-border-subtle)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {sorted.filter(s => s.forecastRevenue > 0).map(s => (
+            <span key={s.ym} style={{ fontSize: 10, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '0.5px solid rgba(167,139,250,0.25)', borderRadius: 6, padding: '2px 8px' }}>
+              {s.label.slice(0, 3)}: {fmt(s.forecastRevenue)} forecast
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

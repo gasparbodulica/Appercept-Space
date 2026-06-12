@@ -278,15 +278,17 @@ export function computeProjectRevenue(
     }
   }
 
-  const isLeadClient = (row: Row) => {
-    if (!clientCol) return false;
+  // Returns the client's status from the Clients DB, or '' if not found.
+  const clientStatusOf = (row: Row): string => {
+    if (!clientCol) return '';
     const name = String(row.cells[clientCol.id] ?? '').toLowerCase().trim();
-    if (!name) return false;
-    const st = clientStatus[name] ?? Object.entries(clientStatus).find(([k]) => k.includes(name) || name.includes(k))?.[1] ?? '';
-    return st === 'Lead';
+    if (!name) return '';
+    return clientStatus[name]
+      ?? Object.entries(clientStatus).find(([k]) => k.includes(name) || name.includes(k))?.[1]
+      ?? '';
   };
 
-  // Only apply ISO date filter — non-ISO (e.g. empty, DD/MM/YYYY) → treated as "no date".
+  // Only apply ISO date filter — non-ISO values treated as "no date".
   const safeYM = (s: string) => /^\d{4}-\d{2}/.test(s) ? ym(s) : '';
 
   let upfrontThisMonth = 0, monthlyRecurring = 0, forecastUpfront = 0, forecastMonthly = 0;
@@ -297,22 +299,24 @@ export function computeProjectRevenue(
 
     const startYM = safeYM(startCol ? String(row.cells[startCol.id] ?? '') : '');
     const endYM   = safeYM(endCol   ? String(row.cells[endCol.id]   ?? '') : '');
-    const lead    = isLeadClient(row);
+    const cst     = clientStatusOf(row); // 'Lead' | 'Active' | 'Past' | 'Onboarding' | ''
 
     const upfront = upfrontCol ? (Number(row.cells[upfrontCol.id]) || 0) : 0;
     const monthly = monthlyCol ? (Number(row.cells[monthlyCol.id]) || 0) : 0;
 
-    // Upfront: count in the start month (or this month if no ISO start date).
-    const upfrontCountsNow = upfront > 0 && (!startYM || startYM === curYM);
-    // Monthly: count when project is running (started, not ended).
-    const started  = !startYM || startYM <= curYM;
-    const notEnded = !endYM   || endYM   >= curYM;
-    const monthlyCountsNow = monthly > 0 && started && notEnded;
+    const upfrontCountsNow  = upfront > 0 && (!startYM || startYM === curYM);
+    const started           = !startYM || startYM <= curYM;
+    const notEnded          = !endYM   || endYM   >= curYM;
+    const monthlyCountsNow  = monthly > 0 && started && notEnded;
 
-    if (lead) {
+    if (cst === 'Lead') {
+      // Lead → forecast, not current profit
       if (upfrontCountsNow) forecastUpfront += upfront;
       if (monthlyCountsNow) forecastMonthly += monthly;
+    } else if (cst === 'Past') {
+      // Past → excluded from both profit and forecast (captured in monthly snapshots)
     } else {
+      // Active, Onboarding, or no client → count in current profit
       if (upfrontCountsNow) upfrontThisMonth += upfront;
       if (monthlyCountsNow) monthlyRecurring += monthly;
     }

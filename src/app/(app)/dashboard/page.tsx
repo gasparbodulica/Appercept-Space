@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { USERS } from '@/lib/seed';
 import { Topbar } from '@/components/layout/Topbar';
@@ -71,15 +71,13 @@ export default function DashboardPage() {
   });
 
   // ── Appercept finances: project upfront (this month) + recurring + consulting + club − expenses = profit ──
-  const { upfrontThisMonth, monthlyRecurring, forecastUpfront, forecastMonthly } = computeProjectRevenue(projectsDb, clientsDb);
+  const { upfrontThisMonth, monthlyRecurring } = computeProjectRevenue(projectsDb, clientsDb);
   const { activeCount: clientCount } = computeClientRevenue(clientsDb);
-  const clientRevenue = monthlyRecurring; // recurring monthly shown as the "client revenue" stat
+  const clientRevenue = monthlyRecurring;
   const { revenue: consultingRevenue, count: consultingCount } = computeConsultingRevenue(consultingDb);
   const { monthlyAvg: clubMonthlyAvg } = computeClubRevenue(clubcrowdDb);
-
-  // Season-aware club revenue: active = in-season Active/Onboarding venues this month;
-  // forecast = full seasonal potential of Lead venues (fee × res × season months).
-  const { active: clubRevenueActual, forecast: clubForecastRevenue } = computeClubCurrentMonth(clubcrowdDb);
+  // Season-aware: only in-season Active/Onboarding venues count toward current profit.
+  const { active: clubRevenueActual } = computeClubCurrentMonth(clubcrowdDb);
 
   // For current-month profit: use actual monthly revenue, not season-averaged.
   const finance = computeCompanyFinance(costsDb, 'Appercept', upfrontThisMonth + monthlyRecurring, consultingRevenue, clubRevenueActual);
@@ -96,7 +94,7 @@ export default function DashboardPage() {
       consulting: consultingRevenue,
       costs: finance.expenses,
       profit: finance.profit,
-      forecastRevenue: forecastUpfront + forecastMonthly,
+      forecastRevenue: 0,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curYM]);
@@ -296,10 +294,23 @@ export default function DashboardPage() {
         </div>
 
         {/* Appercept finances — revenue minus costs = monthly profit */}
-        <ApperceptFinanceBox f={finance} upfront={upfrontThisMonth} recurring={monthlyRecurring} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} projDiag={projDiag} forecastProjectMonthly={forecastUpfront + forecastMonthly} forecastClubYearly={clubForecastRevenue} />
+        <ApperceptFinanceBox f={finance} upfront={upfrontThisMonth} recurring={monthlyRecurring} clientCount={clientCount} consultingCount={consultingCount} onOpenCosts={() => router.push('/pages/costs')} projDiag={projDiag} />
 
-        {/* Revenue history chart — builds up month by month */}
-        {revenueSnapshots.length > 0 && <RevenueHistoryChart snapshots={revenueSnapshots} />}
+        {/* Revenue history chart — current month always shown; builds month by month */}
+        <RevenueHistoryChart
+          snapshots={revenueSnapshots}
+          liveEntry={{
+            ym: curYM,
+            label: finance.monthLabel + ' ' + new Date().getFullYear(),
+            upfront: upfrontThisMonth,
+            monthly: monthlyRecurring,
+            clubs: clubRevenueActual,
+            consulting: consultingRevenue,
+            costs: finance.expenses,
+            profit: finance.profit,
+            forecastRevenue: 0,
+          }}
+        />
 
         {/* Financial Overview — synthesised from Balance Sheet + Cash Flow + real costs/revenue */}
         {hasFinancials && (
@@ -717,7 +728,7 @@ function ClubCrowdSnapshot({ yearly, monthly, stages, connected, total, onOpen }
 }
 
 type ProjDiag = { found: boolean; rows: number; upfrontCol: string; monthlyCol: string; sampleUpfront: number; sampleMonthly: number; rowDetails: Array<{ name: string; status: string; startDate: string; endDate: string; upfront: number; monthly: number }> };
-function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCount, onOpenCosts, projDiag, forecastProjectMonthly, forecastClubYearly }: { f: CompanyFinance; upfront: number; recurring: number; clientCount: number; consultingCount: number; onOpenCosts: () => void; projDiag: ProjDiag; forecastProjectMonthly: number; forecastClubYearly: number }) {
+function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCount, onOpenCosts, projDiag }: { f: CompanyFinance; upfront: number; recurring: number; clientCount: number; consultingCount: number; onOpenCosts: () => void; projDiag: ProjDiag }) {
   const profitPositive = f.profit >= 0;
   const profitColor = profitPositive ? 'var(--color-green)' : 'var(--color-red)';
 
@@ -784,21 +795,6 @@ function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCou
             </div>
             <div style={{ fontSize: 34, fontWeight: 800, color: profitColor, lineHeight: 1 }}>{fmt(f.profit)}</div>
           </div>
-          {(forecastProjectMonthly > 0 || forecastClubYearly > 0) && (
-            <div style={{ padding: '8px 10px', borderRadius: 7, background: 'rgba(167,139,250,0.08)', border: '0.5px solid rgba(167,139,250,0.2)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div style={{ fontSize: 10, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Forecast — if Leads convert</div>
-              {forecastProjectMonthly > 0 && (
-                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#a78bfa' }}>
-                  {fmt(forecastProjectMonthly)}<span style={{ fontSize: 10, fontWeight: 400, marginLeft: 4 }}>/month (projects)</span>
-                </div>
-              )}
-              {forecastClubYearly > 0 && (
-                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#a78bfa' }}>
-                  {fmt(forecastClubYearly)}<span style={{ fontSize: 10, fontWeight: 400, marginLeft: 4 }}>/year (venues, full season)</span>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Right: 4-bar chart + category breakdown */}
@@ -841,10 +837,16 @@ function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCou
 
 type Snapshot = { ym: string; label: string; upfront: number; monthly: number; clubs: number; consulting: number; costs: number; profit: number; forecastRevenue: number };
 
-function RevenueHistoryChart({ snapshots }: { snapshots: Snapshot[] }) {
-  const sorted = [...snapshots].sort((a, b) => a.ym.localeCompare(b.ym)).slice(-12);
-  if (sorted.length === 0) return null;
-  const maxVal = Math.max(1, ...sorted.map(s => Math.max(s.upfront + s.monthly + s.clubs + s.consulting, s.costs)));
+function RevenueHistoryChart({ snapshots, liveEntry }: { snapshots: Snapshot[]; liveEntry: Snapshot }) {
+  const [hoveredYM, setHoveredYM] = useState<string | null>(null);
+
+  // Merge saved snapshots with the live current-month entry (live always wins for current month)
+  const all = [...snapshots.filter(s => s.ym !== liveEntry.ym), liveEntry]
+    .sort((a, b) => a.ym.localeCompare(b.ym))
+    .slice(-12);
+
+  const maxVal = Math.max(1, ...all.map(s => s.upfront + s.monthly + s.clubs + s.consulting + s.costs));
+  const barH = (v: number) => Math.max(2, (v / maxVal) * 120);
 
   return (
     <div style={{
@@ -855,65 +857,81 @@ function RevenueHistoryChart({ snapshots }: { snapshots: Snapshot[] }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
         <div>
           <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Revenue history</div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Monthly performance — builds up as you use the app</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Monthly performance — a new bar is added each month</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: 'var(--color-text-muted)' }}>
           {[
-            { color: 'rgba(0,210,255,0.7)', label: 'One-time' },
-            { color: 'rgba(45,212,191,0.7)', label: 'Recurring' },
-            { color: 'rgba(99,91,255,0.7)', label: 'Clubs' },
-            { color: 'rgba(255,79,106,0.6)', label: 'Costs' },
+            { color: 'rgba(0,210,255,0.8)', label: 'One-time' },
+            { color: 'rgba(45,212,191,0.8)', label: 'Recurring' },
+            { color: 'rgba(99,91,255,0.8)', label: 'Clubs' },
+            { color: 'rgba(255,79,106,0.7)', label: 'Costs' },
           ].map(l => (
             <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: l.color, display: 'block' }} />{l.label}
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: l.color, flexShrink: 0 }} />{l.label}
             </span>
           ))}
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 140, overflowX: 'auto', paddingBottom: 4 }}>
-        {sorted.map((s) => {
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, minHeight: 160, overflowX: 'auto', paddingBottom: 4, position: 'relative' }}>
+        {all.map((s) => {
           const rev = s.upfront + s.monthly + s.clubs + s.consulting;
           const profitColor = s.profit >= 0 ? 'var(--color-green)' : 'var(--color-red)';
-          const barH = (v: number) => `${Math.max(2, (v / maxVal) * 120)}px`;
-          const isCurrent = s.ym === sorted[sorted.length - 1].ym;
+          const isCurrent = s.ym === liveEntry.ym;
+          const isHovered = hoveredYM === s.ym;
+
           return (
-            <div key={s.ym} style={{ flex: '0 0 auto', minWidth: 54, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              {/* Profit number */}
-              <div style={{ fontSize: 9, fontWeight: 700, color: profitColor }}>{fmt(s.profit)}</div>
-              {/* Stacked bar: upfront + monthly + clubs, costs side by side */}
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 120 }}>
-                {/* Revenue bar (stacked) */}
-                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: 18 }}>
-                  {s.clubs > 0 && <div style={{ width: '100%', height: barH(s.clubs), background: 'rgba(99,91,255,0.7)', borderRadius: '2px 2px 0 0' }} />}
-                  {s.monthly > 0 && <div style={{ width: '100%', height: barH(s.monthly), background: 'rgba(45,212,191,0.7)' }} />}
-                  {s.upfront > 0 && <div style={{ width: '100%', height: barH(s.upfront), background: 'rgba(0,210,255,0.7)', borderRadius: s.monthly === 0 && s.clubs === 0 ? '2px 2px 0 0' : 0 }} />}
+            <div
+              key={s.ym}
+              style={{ flex: '0 0 auto', minWidth: 52, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, cursor: 'default', position: 'relative' }}
+              onMouseEnter={() => setHoveredYM(s.ym)}
+              onMouseLeave={() => setHoveredYM(null)}
+            >
+              {/* Hover tooltip */}
+              {isHovered && (
+                <div style={{
+                  position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+                  marginBottom: 8, zIndex: 100,
+                  background: 'var(--color-bg-surface)', border: '0.5px solid var(--color-border-default)',
+                  borderRadius: 8, padding: '10px 12px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                  minWidth: 150, pointerEvents: 'none',
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 6 }}>{s.label}</div>
+                  {s.upfront > 0    && <div style={{ fontSize: 10, color: 'var(--color-accent-bright)',  display: 'flex', justifyContent: 'space-between', gap: 16 }}><span>One-time</span><b>{fmt(s.upfront)}</b></div>}
+                  {s.monthly > 0    && <div style={{ fontSize: 10, color: 'var(--color-teal)',           display: 'flex', justifyContent: 'space-between', gap: 16 }}><span>Recurring</span><b>{fmt(s.monthly)}</b></div>}
+                  {s.clubs > 0      && <div style={{ fontSize: 10, color: '#7c75ff',                    display: 'flex', justifyContent: 'space-between', gap: 16 }}><span>Clubs</span><b>{fmt(s.clubs)}</b></div>}
+                  {s.consulting > 0 && <div style={{ fontSize: 10, color: '#a78bfa',                    display: 'flex', justifyContent: 'space-between', gap: 16 }}><span>Consulting</span><b>{fmt(s.consulting)}</b></div>}
+                  {rev > 0 && <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', display: 'flex', justifyContent: 'space-between', gap: 16, marginTop: 2 }}><span>Revenue</span><b>{fmt(rev)}</b></div>}
+                  {s.costs > 0      && <div style={{ fontSize: 10, color: 'var(--color-red)',            display: 'flex', justifyContent: 'space-between', gap: 16 }}><span>Costs</span><b>− {fmt(s.costs)}</b></div>}
+                  <div style={{ height: '0.5px', background: 'var(--color-border-subtle)', margin: '6px 0' }} />
+                  <div style={{ fontSize: 12, fontWeight: 800, color: profitColor, display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                    <span>Profit</span><span>{fmt(s.profit)}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Stacked bars */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 120, transition: 'opacity 120ms', opacity: hoveredYM && !isHovered ? 0.45 : 1 }}>
+                {/* Revenue stack */}
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: 20, height: 120 }}>
+                  {s.clubs > 0    && <div style={{ width: '100%', height: barH(s.clubs),    background: 'rgba(99,91,255,0.8)',  transition: 'height 400ms' }} />}
+                  {s.consulting > 0 && <div style={{ width: '100%', height: barH(s.consulting), background: 'rgba(167,139,250,0.8)', transition: 'height 400ms' }} />}
+                  {s.monthly > 0  && <div style={{ width: '100%', height: barH(s.monthly),  background: 'rgba(45,212,191,0.8)', transition: 'height 400ms' }} />}
+                  {s.upfront > 0  && <div style={{ width: '100%', height: barH(s.upfront),  background: 'rgba(0,210,255,0.8)',  borderRadius: '3px 3px 0 0', transition: 'height 400ms' }} />}
                 </div>
                 {/* Costs bar */}
-                {s.costs > 0 && (
-                  <div style={{ width: 10, height: barH(s.costs), background: 'rgba(255,79,106,0.6)', borderRadius: '2px 2px 0 0', alignSelf: 'flex-end' }} />
-                )}
+                <div style={{ width: 10, height: s.costs > 0 ? barH(s.costs) : 2, background: s.costs > 0 ? 'rgba(255,79,106,0.7)' : 'transparent', borderRadius: '2px 2px 0 0', alignSelf: 'flex-end', transition: 'height 400ms' }} />
               </div>
+
               {/* Month label */}
               <div style={{ fontSize: 9, color: isCurrent ? 'var(--color-accent-bright)' : 'var(--color-text-muted)', fontWeight: isCurrent ? 700 : 400, textAlign: 'center', whiteSpace: 'nowrap' }}>
-                {s.label.slice(0, 3)} {s.ym.slice(0, 4)}
+                {s.label.slice(0, 3)}<br />{s.ym.slice(2, 4)}
               </div>
-              {isCurrent && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--color-accent)' }} />}
+              {isCurrent && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--color-accent)', marginTop: -2 }} />}
             </div>
           );
         })}
       </div>
-
-      {/* Forecast row */}
-      {sorted.some(s => s.forecastRevenue > 0) && (
-        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '0.5px solid var(--color-border-subtle)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {sorted.filter(s => s.forecastRevenue > 0).map(s => (
-            <span key={s.ym} style={{ fontSize: 10, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '0.5px solid rgba(167,139,250,0.25)', borderRadius: 6, padding: '2px 8px' }}>
-              {s.label.slice(0, 3)}: {fmt(s.forecastRevenue)} forecast
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

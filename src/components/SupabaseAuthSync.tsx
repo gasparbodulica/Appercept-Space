@@ -20,18 +20,27 @@ export function SupabaseAuthSync() {
     if (!isSupabaseConfigured || !supabase) { setAuthChecked(true); return; }
     let active = true;
 
-    // Clear the session ONLY if the current login came from Supabase. A locally
-    // authenticated account (seed/emergency admin, id starts with 'acc-') must be
-    // left alone — otherwise the bridge logs the local admin straight back out.
-    const clearIfSupabaseSession = () => {
+    // Is a local (emergency/seed) admin currently logged in? Their account id
+    // starts with 'acc-'. While they're active, the Supabase bridge must NOT
+    // override or clear their session from a stale/remembered Supabase token.
+    const localAdminActive = () => {
       const { accounts, sessionAccountId } = useAppStore.getState();
       const current = accounts.find(a => a.id === sessionAccountId);
-      const isLocalAccount = !sessionAccountId || (current?.id ?? '').startsWith('acc-');
-      if (!isLocalAccount) setAuthedAccount(null);
+      return (current?.id ?? '').startsWith('acc-');
     };
 
-    const apply = async (userId: string | undefined, justSignedIn: boolean) => {
+    // Clear the session ONLY if the current login came from Supabase.
+    const clearIfSupabaseSession = () => {
+      const { sessionAccountId } = useAppStore.getState();
+      if (sessionAccountId && !localAdminActive()) setAuthedAccount(null);
+    };
+
+    // `explicit` = a deliberate fresh SIGNED_IN (not a remembered/refreshed token).
+    const apply = async (userId: string | undefined, justSignedIn: boolean, explicit = false) => {
       if (!userId) { clearIfSupabaseSession(); return; }
+      // A local admin is active and this is just a stale/remembered Supabase
+      // session waking up — never override the local admin with it.
+      if (localAdminActive() && !explicit) return;
       const acc = await fetchProfile(userId);
       if (active && acc) {
         // Check if admin pre-registered this email — auto-approve and use the admin's name
@@ -61,19 +70,19 @@ export function SupabaseAuthSync() {
       } else if (active) clearIfSupabaseSession();
     };
 
-    // 1) Resolve the existing session on load — treat a remembered session as
-    //    justSignedIn so the WelcomeScreen appears even on auto-login.
+    // 1) Resolve the existing session on load (remembered token → not explicit).
     supabase.auth.getSession().then(async ({ data }) => {
       const hasSession = !!data.session?.user?.id;
-      await apply(data.session?.user?.id, hasSession);
+      await apply(data.session?.user?.id, hasSession, false);
       if (active) setAuthChecked(true);
     });
 
-    // 2) React to future auth changes — treat SIGNED_IN and INITIAL_SESSION
-    //    (remembered session) as justSignedIn; TOKEN_REFRESHED etc. are silent.
+    // 2) React to future auth changes. Only a real SIGNED_IN is an explicit login
+    //    that may take over from a local admin; INITIAL_SESSION/TOKEN_REFRESHED are not.
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      const explicit = event === 'SIGNED_IN';
       const isEntry = event === 'SIGNED_IN' || event === 'INITIAL_SESSION';
-      void apply(session?.user?.id, isEntry && !!session?.user?.id);
+      void apply(session?.user?.id, isEntry && !!session?.user?.id, explicit);
     });
 
     return () => { active = false; sub.subscription.unsubscribe(); };

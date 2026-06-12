@@ -586,15 +586,20 @@ export const useAppStore = create<AppState>()(
       // Emergency owner login — ALWAYS works, independent of the persisted store.
       // Ensures the seed admin exists, then logs in. Used by the AuthScreen bypass
       // so the owner can never be locked out of their own workspace.
-      loginAsLocalAdmin: () => set((s) => {
-        const seedAdmin = ACCOUNTS.find((a) => a.id === 'acc-admin');
-        if (!seedAdmin) return {};
-        const exists = s.accounts.some((a) => a.id === 'acc-admin');
-        const accounts = exists
-          ? s.accounts.map((a) => a.id === 'acc-admin' ? { ...a, password: seedAdmin.password, role: seedAdmin.role, approved: true } : a)
-          : [seedAdmin, ...s.accounts];
-        return { accounts, sessionAccountId: 'acc-admin', justSignedIn: true, authChecked: true };
-      }),
+      loginAsLocalAdmin: () => {
+        // Wipe any stale Supabase session so its remembered token can't wake up
+        // later and override this local admin login (which booted us before).
+        if (isSupabaseConfigured) void signOutSupabase();
+        set((s) => {
+          const seedAdmin = ACCOUNTS.find((a) => a.id === 'acc-admin');
+          if (!seedAdmin) return {};
+          const exists = s.accounts.some((a) => a.id === 'acc-admin');
+          const accounts = exists
+            ? s.accounts.map((a) => a.id === 'acc-admin' ? { ...a, password: seedAdmin.password, role: seedAdmin.role, approved: true } : a)
+            : [seedAdmin, ...s.accounts];
+          return { accounts, sessionAccountId: 'acc-admin', justSignedIn: true, authChecked: true };
+        });
+      },
 
       signOut: () => { if (isSupabaseConfigured) void signOutSupabase(); set({ sessionAccountId: null, justSignedIn: false }); },
 

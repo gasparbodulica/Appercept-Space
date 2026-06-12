@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { Topbar } from '@/components/layout/Topbar';
 import { User } from '@/lib/types';
-import { isSupabaseConfigured, fetchAllProfiles, updateProfileApproval } from '@/lib/auth';
+import { isSupabaseConfigured, fetchAllProfilesDebug, updateProfileApproval } from '@/lib/auth';
 import {
   IconUser, IconBuilding, IconUsers, IconShield, IconUpload,
   IconTrash, IconPlus, IconCheck, IconX, IconPencil, IconKey, IconClock,
@@ -588,31 +588,54 @@ function AccessTab() {
   const [rlsWarning, setRlsWarning] = useState(false); // true when we can only see our own profile
   const [sqlCopied, setSqlCopied] = useState(false);
   const [showSql, setShowSql] = useState(true); // default open so admin always sees it
+  const [diag, setDiag] = useState<{ error: string | null; rawCount: number; emails: string[] } | null>(null);
 
-  const rlsSql = `-- Run once in Supabase → SQL Editor
+  const rlsSql = `-- Run this WHOLE block once in Supabase → SQL Editor
 
--- 1. Let any signed-in user READ all profiles (admin approval list + invite flow)
+-- 1. Auto-create a profile row whenever someone signs up (the missing piece if
+--    sign-ups never appear here — Supabase only makes an auth.users row by default).
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, name, email, role, approved)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'name', split_part(new.email,'@',1)),
+    new.email, 'member', false
+  )
+  on conflict (id) do nothing;
+  return new;
+end; $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- 2. BACKFILL: create profiles for anyone who already signed up (e.g. Karlo) but
+--    has no profile row yet. This makes existing sign-ups appear immediately.
+insert into public.profiles (id, name, email, role, approved)
+select u.id,
+       coalesce(u.raw_user_meta_data->>'name', split_part(u.email,'@',1)),
+       u.email, 'member', false
+from auth.users u
+left join public.profiles p on p.id = u.id
+where p.id is null;
+
+-- 3. Let any signed-in user READ all profiles (so the admin list loads)
 drop policy if exists "read all profiles" on public.profiles;
-create policy "read all profiles"
-  on public.profiles for select
-  to authenticated
-  using (true);
+create policy "read all profiles" on public.profiles for select to authenticated using (true);
 
--- 2. Let admins UPDATE any profile (approve / role / company)
+-- 4. Let admins UPDATE any profile (approve / role / company)
 drop policy if exists "admins update profiles" on public.profiles;
-create policy "admins update profiles"
-  on public.profiles for update
-  to authenticated
+create policy "admins update profiles" on public.profiles for update to authenticated
   using ( (select role from public.profiles p where p.id = auth.uid()) = 'admin' )
   with check ( true );
 
--- 3. Let users update their OWN profile (needed for invite-link auto-approval)
+-- 5. Let users update their OWN profile (invite-link auto-approval)
 drop policy if exists "users update own profile" on public.profiles;
-create policy "users update own profile"
-  on public.profiles for update
-  to authenticated
-  using ( auth.uid() = id )
-  with check ( true );`;
+create policy "users update own profile" on public.profiles for update to authenticated
+  using ( auth.uid() = id ) with check ( true );`;
 
   const copySql = () => {
     navigator.clipboard.writeText(rlsSql).then(() => {
@@ -622,13 +645,14 @@ create policy "users update own profile"
   };
 
   const refreshProfiles = useCallback(async () => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured) { setDiag({ error: 'Supabase env vars missing in this deployment.', rawCount: 0, emails: [] }); return; }
     setLoadingProfiles(true);
-    const profs = await fetchAllProfiles();
-    if (profs.length > 0) {
-      mergeSupabaseAccounts(profs);
+    const res = await fetchAllProfilesDebug();
+    setDiag({ error: res.error, rawCount: res.rawCount, emails: res.accounts.map(a => a.email) });
+    if (res.accounts.length > 0) {
+      mergeSupabaseAccounts(res.accounts);
       // If we only got 1 profile (just ourselves), RLS likely not set up yet
-      setRlsWarning(profs.length === 1 && profs[0]?.id === me?.id);
+      setRlsWarning(res.rawCount === 1 && res.accounts[0]?.id === me?.id);
     } else {
       setRlsWarning(true);
     }
@@ -758,9 +782,31 @@ create policy "users update own profile"
           )}
         </div>
 
-        {rlsWarning && (
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-amber)', marginBottom: 8, lineHeight: 1.5 }}>
-            Supabase can only see your own profile — new sign-ups (like Karlo) won't appear until you run the RLS policy below.
+        {/* Live diagnostic: shows exactly what Supabase returned */}
+        {diag && (
+          <div style={{
+            fontSize: 'var(--text-xs)', marginBottom: 8, lineHeight: 1.6,
+            padding: '10px 12px', borderRadius: 7,
+            background: diag.error ? 'rgba(255,79,106,0.1)' : 'rgba(96,165,250,0.08)',
+            border: `0.5px solid ${diag.error ? 'rgba(255,79,106,0.3)' : 'rgba(96,165,250,0.25)'}`,
+            color: 'var(--color-text-secondary)',
+          }}>
+            {diag.error ? (
+              <>
+                <b style={{ color: 'var(--color-red)' }}>Supabase error:</b> {diag.error}
+                <div style={{ marginTop: 4 }}>→ This usually means the RLS policy isn&apos;t applied yet. Run the SQL above.</div>
+              </>
+            ) : (
+              <>
+                <b style={{ color: 'var(--color-accent-bright)' }}>Supabase returned {diag.rawCount} profile{diag.rawCount !== 1 ? 's' : ''}:</b>{' '}
+                {diag.emails.length > 0 ? diag.emails.join(', ') : '(none)'}
+                {diag.rawCount <= 1 && (
+                  <div style={{ marginTop: 4, color: 'var(--color-amber)' }}>
+                    → Only your own profile is visible. If Karlo signed up but isn&apos;t here, his profile row was never created — run the full SQL above (the trigger + backfill in steps 1–2 will create it).
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 

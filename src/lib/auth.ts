@@ -67,6 +67,16 @@ export async function fetchAllProfiles(): Promise<Account[]> {
   return (data as SupabaseProfile[]).map(profileToAccount);
 }
 
+/** Diagnostic fetch — returns the raw result so the admin UI can show exactly
+ *  what Supabase returned (count, emails, or the error message). */
+export async function fetchAllProfilesDebug(): Promise<{ accounts: Account[]; error: string | null; rawCount: number }> {
+  if (!supabase) return { accounts: [], error: 'Supabase client is not configured (env vars missing).', rawCount: 0 };
+  const { data, error } = await supabase.from('profiles').select('*');
+  if (error) return { accounts: [], error: error.message, rawCount: 0 };
+  const rows = (data ?? []) as SupabaseProfile[];
+  return { accounts: rows.map(profileToAccount), error: null, rawCount: rows.length };
+}
+
 /** Update a profile's approval/role/company in Supabase (admin only via RLS). */
 export async function updateProfileApproval(
   userId: string,

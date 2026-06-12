@@ -12,6 +12,7 @@ import { ClientPortalView } from '@/components/ClientPortalView';
 import { AIAssistant } from '@/components/AIAssistant';
 import { ClientPortalSync } from '@/components/ClientPortalSync';
 import { SupabaseAuthSync } from '@/components/SupabaseAuthSync';
+import { WorkspaceBackupSync } from '@/components/WorkspaceBackupSync';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { toggleSidebar, setCommandPaletteOpen, openRowId } = useAppStore();
@@ -46,13 +47,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // Before hydration (or while the real session resolves), render only the
   // auth-sync bridge so we never flash the login screen for a logged-in user.
-  if (!hydrated || !authChecked) return <SupabaseAuthSync />;
+  if (!hydrated || !authChecked) return <><SupabaseAuthSync /><WorkspaceBackupSync /></>;
 
   // Access gate: must be signed in AND approved by an admin
   if (!account || !account.approved) {
     return (
       <>
         <SupabaseAuthSync />
+        <WorkspaceBackupSync />
         <AuthScreen />
       </>
     );
@@ -96,6 +98,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <AIAssistant />
       <ClientPortalSync />
       <SupabaseAuthSync />
+      <WorkspaceBackupSync />
     </div>
   );
 }

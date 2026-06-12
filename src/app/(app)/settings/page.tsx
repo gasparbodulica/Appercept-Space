@@ -637,7 +637,22 @@ create policy "app update profiles" on public.profiles for update to anon, authe
 -- 5. Let the app INSERT profiles (needed if a sign-up's trigger didn't fire).
 drop policy if exists "app insert profiles" on public.profiles;
 create policy "app insert profiles" on public.profiles for insert to anon, authenticated
-  with check ( true );`;
+  with check ( true );
+
+-- 6. CLOUD BACKUP: stores your whole workspace (projects, venues, members, logo)
+--    so your data is saved forever and survives a cleared browser or new device.
+create table if not exists public.workspace_state (
+  id text primary key,
+  data jsonb,
+  updated_at timestamptz default now()
+);
+alter table public.workspace_state enable row level security;
+drop policy if exists "workspace read"   on public.workspace_state;
+drop policy if exists "workspace write"  on public.workspace_state;
+drop policy if exists "workspace update" on public.workspace_state;
+create policy "workspace read"   on public.workspace_state for select to anon, authenticated using ( true );
+create policy "workspace write"  on public.workspace_state for insert to anon, authenticated with check ( true );
+create policy "workspace update" on public.workspace_state for update to anon, authenticated using ( true ) with check ( true );`;
 
   const copySql = () => {
     navigator.clipboard.writeText(rlsSql).then(() => {

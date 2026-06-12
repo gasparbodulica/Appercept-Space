@@ -685,15 +685,24 @@ export const useAppStore = create<AppState>()(
       // deduped by email. A live Supabase row (UUID id) wins over a seed/local
       // placeholder for the same email so approvals act on the real account.
       mergeSupabaseAccounts: (incoming) => set((s) => {
+        const sid = s.sessionAccountId;
+        const activeAccount = s.accounts.find((a) => a.id === sid);
         const byEmail = new Map<string, Account>();
         for (const a of s.accounts) byEmail.set(a.email.toLowerCase(), a);
         for (const a of incoming) {
           const key = a.email.toLowerCase();
           const existing = byEmail.get(key);
-          // Prefer the incoming Supabase row (real UUID, authoritative approved/role)
+          // NEVER replace the account we're currently logged in as — doing so
+          // orphans the session (sessionAccountId points to an id that no longer
+          // exists) and instantly logs the user out. This was the Access-tab logout.
+          if (existing && existing.id === sid) continue;
+          // Otherwise prefer the incoming Supabase row (real UUID, authoritative).
           if (!existing || existing.id.startsWith('acc-')) byEmail.set(key, a);
         }
-        return { accounts: Array.from(byEmail.values()) };
+        const result = Array.from(byEmail.values());
+        // Safety net: guarantee the active session account is always present.
+        if (sid && activeAccount && !result.some((a) => a.id === sid)) result.push(activeAccount);
+        return { accounts: result };
       }),
       deleteAccount: (id) => set((s) => ({
         accounts: s.accounts.filter((a) => a.id !== id),

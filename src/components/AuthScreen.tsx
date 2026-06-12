@@ -6,7 +6,7 @@ import { isSupabaseConfigured, signInSupabase, signUpSupabase, sendResetEmail } 
 import { IconLock, IconMail, IconUser, IconShieldCheck, IconClock, IconLogout } from '@tabler/icons-react';
 
 export function AuthScreen() {
-  const { signIn, signUp, signOut, requestResetCode, confirmReset, workspace, pendingInvites } = useAppStore();
+  const { signIn, signUp, signOut, requestResetCode, confirmReset, workspace, pendingInvites, loginAsLocalAdmin } = useAppStore();
   const account = useCurrentAccount();
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin');
   const [resetStep, setResetStep] = useState<'request' | 'verify'>('request');
@@ -71,9 +71,8 @@ export function AuthScreen() {
     if (mode === 'signin'
         && email.trim().toLowerCase() === 'gbodulica@appercept.net'
         && password === 'appercept') {
-      const res = signIn(email, password);
-      if (res.ok) return;
-      // If the local store somehow lacks the seed account, fall through to normal flow.
+      loginAsLocalAdmin();
+      return;
     }
     if (isSupabaseConfigured) { void handleSupabaseAuth(); return; }
     // Local prototype fallback

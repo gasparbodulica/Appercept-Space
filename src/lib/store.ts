@@ -119,6 +119,7 @@ interface AppState {
   // Actions — auth / access
   signUp: (name: string, email: string, password: string) => { ok: boolean; error?: string };
   signIn: (email: string, password: string) => { ok: boolean; error?: string };
+  loginAsLocalAdmin: () => void;
   signOut: () => void;
   clearJustSignedIn: () => void;
   // Real (Supabase) auth bridge — set the signed-in user from the live session
@@ -581,6 +582,19 @@ export const useAppStore = create<AppState>()(
         set({ sessionAccountId: acc.id, justSignedIn: acc.approved });
         return { ok: true };
       },
+
+      // Emergency owner login — ALWAYS works, independent of the persisted store.
+      // Ensures the seed admin exists, then logs in. Used by the AuthScreen bypass
+      // so the owner can never be locked out of their own workspace.
+      loginAsLocalAdmin: () => set((s) => {
+        const seedAdmin = ACCOUNTS.find((a) => a.id === 'acc-admin');
+        if (!seedAdmin) return {};
+        const exists = s.accounts.some((a) => a.id === 'acc-admin');
+        const accounts = exists
+          ? s.accounts.map((a) => a.id === 'acc-admin' ? { ...a, password: seedAdmin.password, role: seedAdmin.role, approved: true } : a)
+          : [seedAdmin, ...s.accounts];
+        return { accounts, sessionAccountId: 'acc-admin', justSignedIn: true, authChecked: true };
+      }),
 
       signOut: () => { if (isSupabaseConfigured) void signOutSupabase(); set({ sessionAccountId: null, justSignedIn: false }); },
 

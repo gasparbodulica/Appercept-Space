@@ -907,9 +907,9 @@ function RevenueHistoryChart({ snapshots, liveEntry }: { snapshots: Snapshot[]; 
                 <div style={{
                   position: 'absolute', bottom: '100%', left: '50%',
                   transform: 'translateX(-50%)', marginBottom: 10, zIndex: 300,
-                  background: 'var(--color-bg-surface)', border: '0.5px solid var(--color-border-default)',
+                  background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-strong)',
                   borderRadius: 10, padding: '10px 14px',
-                  boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
+                  boxShadow: '0 -3px 14px rgba(0,0,0,0.28)',
                   minWidth: 155, pointerEvents: 'none', whiteSpace: 'nowrap',
                 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 7 }}>{s.label}</div>

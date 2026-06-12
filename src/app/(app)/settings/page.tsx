@@ -631,6 +631,7 @@ create policy "read all profiles" on public.profiles for select to anon, authent
 -- 4. Let the app UPDATE profiles (approve / role / company) for the same reason.
 drop policy if exists "admins update profiles" on public.profiles;
 drop policy if exists "users update own profile" on public.profiles;
+drop policy if exists "app update profiles" on public.profiles;
 create policy "app update profiles" on public.profiles for update to anon, authenticated
   using ( true ) with check ( true );
 

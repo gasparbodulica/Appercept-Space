@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { Database, Row, Column, CellValue, Comment, Activity, Notification, Page, ViewConfig, Filter, Sort, User, Workspace, Account, Channel, ChatMessage, PortalMessage, AbsenceEntry, TeamRole, ProjectShare } from './types';
 import { DATABASES, PAGES, USERS, WORKSPACE, COMMENTS, ACTIVITIES, NOTIFICATIONS, ACCOUNTS, CHANNELS, CHAT_MESSAGES, PORTAL_MESSAGES, TEAM_ROLES, PROJECT_SHARES, REMOVED_DEMO_EMAILS, REMOVED_DEMO_USER_IDS, REMOVED_DEMO_ROLE_IDS } from './seed';
 import { isSupabaseConfigured } from './supabase';
-import { signOutSupabase } from './auth';
+import { signOutSupabase, registerInviteToken } from './auth';
 
 interface AppState {
   // Core data
@@ -621,6 +621,9 @@ export const useAppStore = create<AppState>()(
         const now = new Date();
         const expiresAt = new Date(now.getTime() + 7 * 24 * 3600 * 1000).toISOString();
         set((s) => ({ inviteLinks: [...s.inviteLinks, { token, createdAt: now.toISOString(), expiresAt, usedCount: 0 }] }));
+        // Register in Supabase so the token can be validated when the invitee signs
+        // up on their own browser (local inviteLinks only exist in the owner's store).
+        if (isSupabaseConfigured) void registerInviteToken(token, expiresAt);
         return token;
       },
       revokeInviteLink: (token: string) => set((s) => ({ inviteLinks: s.inviteLinks.filter(l => l.token !== token) })),

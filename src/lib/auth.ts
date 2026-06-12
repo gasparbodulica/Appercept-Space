@@ -88,4 +88,25 @@ export async function updateProfileApproval(
   return { ok: true };
 }
 
+// ─── Invite links (stored in Supabase so they work across browsers) ──────────
+
+/** Register an invite token in Supabase so it can be validated when someone
+ *  signs up on a different device/browser. Best-effort. */
+export async function registerInviteToken(token: string, expiresAt: string): Promise<void> {
+  if (!supabase) return;
+  try { await supabase.from('invite_links').upsert({ token, expires_at: expiresAt }, { onConflict: 'token' }); }
+  catch { /* best-effort */ }
+}
+
+/** Validate an invite token against Supabase (exists and not expired). */
+export async function validateInviteToken(token: string): Promise<boolean> {
+  if (!supabase || !token) return false;
+  try {
+    const { data, error } = await supabase.from('invite_links').select('token, expires_at').eq('token', token).single();
+    if (error || !data) return false;
+    if (data.expires_at && new Date(data.expires_at as string) < new Date()) return false;
+    return true;
+  } catch { return false; }
+}
+
 export { isSupabaseConfigured };

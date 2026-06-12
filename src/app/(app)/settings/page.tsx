@@ -653,7 +653,20 @@ drop policy if exists "workspace write"  on public.workspace_state;
 drop policy if exists "workspace update" on public.workspace_state;
 create policy "workspace read"   on public.workspace_state for select to anon, authenticated using ( true );
 create policy "workspace write"  on public.workspace_state for insert to anon, authenticated with check ( true );
-create policy "workspace update" on public.workspace_state for update to anon, authenticated using ( true ) with check ( true );`;
+create policy "workspace update" on public.workspace_state for update to anon, authenticated using ( true ) with check ( true );
+
+-- 7. INVITE LINKS: validated server-side so an invite works on the invitee's
+--    own browser (auto-approves them as a member when they sign up).
+create table if not exists public.invite_links (
+  token text primary key,
+  expires_at timestamptz,
+  created_at timestamptz default now()
+);
+alter table public.invite_links enable row level security;
+drop policy if exists "invite read"  on public.invite_links;
+drop policy if exists "invite write" on public.invite_links;
+create policy "invite read"  on public.invite_links for select to anon, authenticated using ( true );
+create policy "invite write" on public.invite_links for insert to anon, authenticated with check ( true );`;
 
   const copySql = () => {
     navigator.clipboard.writeText(rlsSql).then(() => {

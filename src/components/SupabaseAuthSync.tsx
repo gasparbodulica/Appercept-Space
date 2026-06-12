@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useAppStore } from '@/lib/store';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { fetchProfile, updateProfileApproval } from '@/lib/auth';
+import { fetchProfile, updateProfileApproval, validateInviteToken } from '@/lib/auth';
 
 /**
  * Bridges the live Supabase auth session into the app's account model.
@@ -44,12 +44,13 @@ export function SupabaseAuthSync() {
       const acc = await fetchProfile(userId);
       if (active && acc) {
         // Check if admin pre-registered this email — auto-approve and use the admin's name
-        const { pendingInvites, removePendingInvite, consumeInviteLink } = useAppStore.getState();
+        const { pendingInvites, removePendingInvite } = useAppStore.getState();
         const invite = pendingInvites.find(i => i.email.toLowerCase() === acc.email.toLowerCase());
 
-        // Check for a link-based invite token stored by AuthScreen after signup
+        // Check for a link-based invite token stored by AuthScreen after signup.
+        // Validated against Supabase so it works on the invitee's own browser.
         const storedToken = typeof localStorage !== 'undefined' ? localStorage.getItem('appercept_invite') : null;
-        const linkInviteValid = storedToken ? consumeInviteLink(storedToken) : false;
+        const linkInviteValid = storedToken ? await validateInviteToken(storedToken) : false;
         if (storedToken) localStorage.removeItem('appercept_invite');
 
         let resolved = acc;

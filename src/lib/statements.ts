@@ -189,13 +189,10 @@ export function computeForecast(databases: Record<string, Database>, pages: Page
   const consultingDb = dbBySlug(databases, pages, 'consulting');
   const costsDb = findCostsDb(databases);
 
-  // Season-aware club revenue: only Active/Onboarding venues that are currently in season.
-  const { active: clubMonthlyActual } = computeClubCurrentMonth(clubcrowdDb);
-
-  // Recurring revenue = project monthly + in-season club monthly.
-  const baseRevenue = computeClientRevenue(clientsDb, projectsDb).revenue + clubMonthlyActual;
-  // + your predicted monthly consulting (editable)
-  const monthlyRevenue = baseRevenue + (a.monthlyConsulting || 0);
+  // Forecast is a pure manual calculator — only the user's typed-in predictions matter.
+  // baseRevenue = 0 intentionally; everything comes from "Your Predictions" inputs.
+  const baseRevenue = 0;
+  const monthlyRevenue = a.monthlyConsulting || 0;
   const monthlyCosts = recurringMonthlyCosts(costsDb);
   const monthlyProfit = monthlyRevenue - monthlyCosts;
   const consultingThisMonth = computeConsultingRevenue(consultingDb).revenue;

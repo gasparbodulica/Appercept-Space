@@ -52,7 +52,7 @@ export function ForecastView({ pageId, pageTitle, pageIcon, pageIconColor }: {
           <div>
             <h2 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Monthly run-rate</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-              <RunCard label="Monthly revenue" value={fmt(f.monthlyRevenue)} color="var(--color-teal)" icon={<IconCoinEuro size={15} />} sub={`${fmt(f.baseRevenue)} recurring (projects + clubs) + ${fmt(forecastAssumptions.monthlyConsulting)} consulting`} />
+              <RunCard label="Monthly revenue" value={fmt(f.monthlyRevenue)} color="var(--color-teal)" icon={<IconCoinEuro size={15} />} sub="From your manual prediction above" />
               <RunCard label="Recurring costs" value={`− ${fmt(f.monthlyCosts)}`} color="var(--color-red)" icon={<IconReceipt size={15} />} sub="monthly + yearly costs / mo" />
               <RunCard label="Monthly profit" value={fmt(f.monthlyProfit)} color={f.monthlyProfit >= 0 ? 'var(--color-green)' : 'var(--color-red)'} icon={f.monthlyProfit >= 0 ? <IconTrendingUp size={15} /> : <IconTrendingDown size={15} />} sub="revenue − costs" highlight />
             </div>
@@ -66,8 +66,8 @@ export function ForecastView({ pageId, pageTitle, pageIcon, pageIconColor }: {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
               <Field
-                label="Expected consulting / mo"
-                hint="Variable project income you expect to land"
+                label="Expected monthly revenue"
+                hint="Your total expected monthly revenue — type it here"
                 prefix="€"
                 value={forecastAssumptions.monthlyConsulting}
                 onChange={(v) => setForecastAssumptions({ monthlyConsulting: v })}

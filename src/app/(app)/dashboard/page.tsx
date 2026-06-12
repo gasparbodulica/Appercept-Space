@@ -840,13 +840,21 @@ type Snapshot = { ym: string; label: string; upfront: number; monthly: number; c
 function RevenueHistoryChart({ snapshots, liveEntry }: { snapshots: Snapshot[]; liveEntry: Snapshot }) {
   const [hoveredYM, setHoveredYM] = useState<string | null>(null);
 
-  // Merge saved snapshots with the live current-month entry (live always wins for current month)
+  // Live entry always wins for the current month
   const all = [...snapshots.filter(s => s.ym !== liveEntry.ym), liveEntry]
     .sort((a, b) => a.ym.localeCompare(b.ym))
     .slice(-12);
 
-  const maxVal = Math.max(1, ...all.map(s => s.upfront + s.monthly + s.clubs + s.consulting + s.costs));
-  const barH = (v: number) => Math.max(2, (v / maxVal) * 120);
+  // Scale bars relative to largest revenue figure
+  const maxRev = Math.max(1, ...all.map(s => s.upfront + s.monthly + s.clubs + s.consulting));
+  const BAR_MAX = 100; // px
+
+  const legend = [
+    { color: 'rgba(0,210,255,0.85)', label: 'One-time' },
+    { color: 'rgba(45,212,191,0.85)', label: 'Recurring' },
+    { color: 'rgba(99,91,255,0.85)', label: 'Clubs' },
+    { color: 'rgba(255,79,106,0.75)', label: 'Costs' },
+  ];
 
   return (
     <div style={{
@@ -857,81 +865,111 @@ function RevenueHistoryChart({ snapshots, liveEntry }: { snapshots: Snapshot[]; 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
         <div>
           <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Revenue history</div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Monthly performance — a new bar is added each month</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Monthly performance · hover a bar for details</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: 'var(--color-text-muted)' }}>
-          {[
-            { color: 'rgba(0,210,255,0.8)', label: 'One-time' },
-            { color: 'rgba(45,212,191,0.8)', label: 'Recurring' },
-            { color: 'rgba(99,91,255,0.8)', label: 'Clubs' },
-            { color: 'rgba(255,79,106,0.7)', label: 'Costs' },
-          ].map(l => (
-            <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: l.color, flexShrink: 0 }} />{l.label}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {legend.map(l => (
+            <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--color-text-muted)' }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: l.color, flexShrink: 0, display: 'block' }} />{l.label}
             </span>
           ))}
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, minHeight: 160, overflowX: 'auto', paddingBottom: 4, position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, paddingBottom: 4, overflowX: 'auto' }}>
         {all.map((s) => {
-          const rev = s.upfront + s.monthly + s.clubs + s.consulting;
-          const profitColor = s.profit >= 0 ? 'var(--color-green)' : 'var(--color-red)';
-          const isCurrent = s.ym === liveEntry.ym;
-          const isHovered = hoveredYM === s.ym;
+          const rev    = s.upfront + s.monthly + s.clubs + s.consulting;
+          const pColor = s.profit >= 0 ? 'var(--color-green)' : 'var(--color-red)';
+          const isCur  = s.ym === liveEntry.ym;
+          const isHov  = hoveredYM === s.ym;
+          const scale  = (v: number) => Math.max(3, Math.round((v / maxRev) * BAR_MAX));
+
+          const segments = [
+            { v: s.clubs,      color: 'rgba(99,91,255,0.85)' },
+            { v: s.consulting, color: 'rgba(167,139,250,0.85)' },
+            { v: s.monthly,    color: 'rgba(45,212,191,0.85)' },
+            { v: s.upfront,    color: 'rgba(0,210,255,0.85)' },
+          ].filter(sg => sg.v > 0);
 
           return (
             <div
               key={s.ym}
-              style={{ flex: '0 0 auto', minWidth: 52, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, cursor: 'default', position: 'relative' }}
               onMouseEnter={() => setHoveredYM(s.ym)}
               onMouseLeave={() => setHoveredYM(null)}
+              style={{
+                flex: '0 0 auto', minWidth: 56, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: 4, cursor: 'default', position: 'relative',
+                opacity: hoveredYM && !isHov ? 0.4 : 1, transition: 'opacity 120ms',
+              }}
             >
               {/* Hover tooltip */}
-              {isHovered && (
+              {isHov && (
                 <div style={{
-                  position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
-                  marginBottom: 8, zIndex: 100,
+                  position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%',
+                  transform: 'translateX(-50%)', zIndex: 200,
                   background: 'var(--color-bg-surface)', border: '0.5px solid var(--color-border-default)',
-                  borderRadius: 8, padding: '10px 12px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                  minWidth: 150, pointerEvents: 'none',
+                  borderRadius: 10, padding: '10px 14px', boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+                  minWidth: 160, pointerEvents: 'none', whiteSpace: 'nowrap',
                 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 6 }}>{s.label}</div>
-                  {s.upfront > 0    && <div style={{ fontSize: 10, color: 'var(--color-accent-bright)',  display: 'flex', justifyContent: 'space-between', gap: 16 }}><span>One-time</span><b>{fmt(s.upfront)}</b></div>}
-                  {s.monthly > 0    && <div style={{ fontSize: 10, color: 'var(--color-teal)',           display: 'flex', justifyContent: 'space-between', gap: 16 }}><span>Recurring</span><b>{fmt(s.monthly)}</b></div>}
-                  {s.clubs > 0      && <div style={{ fontSize: 10, color: '#7c75ff',                    display: 'flex', justifyContent: 'space-between', gap: 16 }}><span>Clubs</span><b>{fmt(s.clubs)}</b></div>}
-                  {s.consulting > 0 && <div style={{ fontSize: 10, color: '#a78bfa',                    display: 'flex', justifyContent: 'space-between', gap: 16 }}><span>Consulting</span><b>{fmt(s.consulting)}</b></div>}
-                  {rev > 0 && <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', display: 'flex', justifyContent: 'space-between', gap: 16, marginTop: 2 }}><span>Revenue</span><b>{fmt(rev)}</b></div>}
-                  {s.costs > 0      && <div style={{ fontSize: 10, color: 'var(--color-red)',            display: 'flex', justifyContent: 'space-between', gap: 16 }}><span>Costs</span><b>− {fmt(s.costs)}</b></div>}
-                  <div style={{ height: '0.5px', background: 'var(--color-border-subtle)', margin: '6px 0' }} />
-                  <div style={{ fontSize: 12, fontWeight: 800, color: profitColor, display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 8 }}>{s.label}</div>
+                  {s.upfront > 0    && <Row label="One-time"   val={fmt(s.upfront)}    color="var(--color-accent-bright)" />}
+                  {s.monthly > 0    && <Row label="Recurring"  val={fmt(s.monthly)}    color="var(--color-teal)" />}
+                  {s.clubs > 0      && <Row label="Clubs"      val={fmt(s.clubs)}      color="#7c75ff" />}
+                  {s.consulting > 0 && <Row label="Consulting" val={fmt(s.consulting)} color="#a78bfa" />}
+                  {rev > 0 && <Row label="Revenue" val={fmt(rev)} color="var(--color-text-secondary)" />}
+                  {s.costs > 0      && <Row label="Costs"      val={`− ${fmt(s.costs)}`} color="var(--color-red)" />}
+                  <div style={{ height: 1, background: 'var(--color-border-subtle)', margin: '6px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 800, color: pColor }}>
                     <span>Profit</span><span>{fmt(s.profit)}</span>
                   </div>
                 </div>
               )}
 
-              {/* Stacked bars */}
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 120, transition: 'opacity 120ms', opacity: hoveredYM && !isHovered ? 0.45 : 1 }}>
-                {/* Revenue stack */}
-                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: 20, height: 120 }}>
-                  {s.clubs > 0    && <div style={{ width: '100%', height: barH(s.clubs),    background: 'rgba(99,91,255,0.8)',  transition: 'height 400ms' }} />}
-                  {s.consulting > 0 && <div style={{ width: '100%', height: barH(s.consulting), background: 'rgba(167,139,250,0.8)', transition: 'height 400ms' }} />}
-                  {s.monthly > 0  && <div style={{ width: '100%', height: barH(s.monthly),  background: 'rgba(45,212,191,0.8)', transition: 'height 400ms' }} />}
-                  {s.upfront > 0  && <div style={{ width: '100%', height: barH(s.upfront),  background: 'rgba(0,210,255,0.8)',  borderRadius: '3px 3px 0 0', transition: 'height 400ms' }} />}
+              {/* Revenue stacked bar */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: BAR_MAX + 4 }}>
+                <div style={{ width: 22, height: BAR_MAX + 4, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                  {segments.length > 0
+                    ? segments.map((sg, i) => (
+                        <div key={i} style={{
+                          width: '100%',
+                          height: scale(sg.v),
+                          background: sg.color,
+                          borderRadius: i === 0 ? '3px 3px 0 0' : 0,
+                          transition: 'height 400ms ease',
+                        }} />
+                      ))
+                    : <div style={{ width: '100%', height: 4, background: 'var(--color-border-subtle)', borderRadius: 2 }} />
+                  }
                 </div>
-                {/* Costs bar */}
-                <div style={{ width: 10, height: s.costs > 0 ? barH(s.costs) : 2, background: s.costs > 0 ? 'rgba(255,79,106,0.7)' : 'transparent', borderRadius: '2px 2px 0 0', alignSelf: 'flex-end', transition: 'height 400ms' }} />
+                {/* Costs bar alongside */}
+                <div style={{
+                  width: 10, alignSelf: 'flex-end',
+                  height: s.costs > 0 ? scale(s.costs) : 3,
+                  background: s.costs > 0 ? 'rgba(255,79,106,0.75)' : 'var(--color-border-subtle)',
+                  borderRadius: '2px 2px 0 0', transition: 'height 400ms ease',
+                }} />
               </div>
 
+              {/* Profit text — always visible */}
+              <div style={{ fontSize: 9, fontWeight: 700, color: pColor, whiteSpace: 'nowrap' }}>{fmt(s.profit)}</div>
+
               {/* Month label */}
-              <div style={{ fontSize: 9, color: isCurrent ? 'var(--color-accent-bright)' : 'var(--color-text-muted)', fontWeight: isCurrent ? 700 : 400, textAlign: 'center', whiteSpace: 'nowrap' }}>
-                {s.label.slice(0, 3)}<br />{s.ym.slice(2, 4)}
+              <div style={{ fontSize: 9, textAlign: 'center', lineHeight: 1.3, color: isCur ? 'var(--color-accent-bright)' : 'var(--color-text-muted)', fontWeight: isCur ? 700 : 400 }}>
+                {s.label.slice(0, 3)}<br />&apos;{s.ym.slice(2, 4)}
               </div>
-              {isCurrent && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--color-accent)', marginTop: -2 }} />}
+              {isCur && <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-accent)' }} />}
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function Row({ label, val, color }: { label: string; val: string; color: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 10, marginBottom: 2, color }}>
+      <span>{label}</span><b>{val}</b>
     </div>
   );
 }

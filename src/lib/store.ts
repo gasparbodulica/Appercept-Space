@@ -61,6 +61,7 @@ interface AppState {
   currentViewId: string | null;
   sidebarCollapsed: boolean;
   sidebarNavOrder: string[];
+  mobileNavOpen: boolean; // transient — the slide-in sidebar drawer on phones
   openRowId: string | null;
   openDatabaseId: string | null;
   commandPaletteOpen: boolean;
@@ -71,6 +72,7 @@ interface AppState {
   setCurrentPage: (slug: string) => void;
   setCurrentView: (viewId: string) => void;
   toggleSidebar: () => void;
+  setMobileNavOpen: (open: boolean) => void;
   setSidebarNavOrder: (order: string[]) => void;
   openRow: (rowId: string, databaseId: string) => void;
   closeRow: () => void;
@@ -226,6 +228,7 @@ export const useAppStore = create<AppState>()(
       currentPageSlug: 'todo',
       currentViewId: null,
       sidebarCollapsed: false,
+      mobileNavOpen: false,
       sidebarNavOrder: ['home', 'messages', 'client-portal', 'revenue-split'],
       openRowId: null,
       openDatabaseId: null,
@@ -237,6 +240,7 @@ export const useAppStore = create<AppState>()(
       setCurrentPage: (slug) => set({ currentPageSlug: slug, currentViewId: null, openRowId: null }),
       setCurrentView: (viewId) => set({ currentViewId: viewId }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      setMobileNavOpen: (open) => set({ mobileNavOpen: open }),
       setSidebarNavOrder: (order) => set({ sidebarNavOrder: order }),
       openRow: (rowId, databaseId) => set({ openRowId: rowId, openDatabaseId: databaseId }),
       closeRow: () => set({ openRowId: null, openDatabaseId: null }),

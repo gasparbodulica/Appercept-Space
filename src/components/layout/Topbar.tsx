@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAppStore, useUnreadNotifications, useUnreadPortalCount, usePendingApprovalCount } from '@/lib/store';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { formatRelativeTime } from '@/lib/utils';
 import { IconShare, IconStar, IconStarFilled, IconDots, IconBell, IconBellFilled, IconPlus, IconLayoutSidebar, IconLink, IconDownload, IconBriefcase, IconUserCheck, IconMessageCircle } from '@tabler/icons-react';
 
@@ -15,8 +16,9 @@ interface TopbarProps {
 export function Topbar({ breadcrumb = [], pageTitle, extra }: TopbarProps) {
   const {
     sidebarCollapsed, toggleSidebar, setCommandPaletteOpen, setNewPageModalOpen,
-    notifications, markAllNotificationsRead, markNotificationRead,
+    notifications, markAllNotificationsRead, markNotificationRead, setMobileNavOpen,
   } = useAppStore();
+  const isMobile = useIsMobile();
   const router = useRouter();
   const pathname = usePathname();
   const unread = useUnreadNotifications();
@@ -44,8 +46,8 @@ export function Topbar({ breadcrumb = [], pageTitle, extra }: TopbarProps) {
       alignItems: 'center', paddingLeft: 12, paddingRight: 16, gap: 8,
       position: 'relative', zIndex: 40, flexShrink: 0,
     }}>
-      {/* Sidebar toggle */}
-      <button onClick={toggleSidebar} className="btn-ghost" style={{ padding: '4px 6px' }} aria-label="Toggle sidebar">
+      {/* Sidebar toggle — opens the slide-in drawer on mobile, collapses on desktop */}
+      <button onClick={() => (isMobile ? setMobileNavOpen(true) : toggleSidebar())} className="btn-ghost" style={{ padding: '4px 6px' }} aria-label="Toggle sidebar">
         <IconLayoutSidebar size={16} style={{ color: 'var(--color-text-muted)' }} />
       </button>
 

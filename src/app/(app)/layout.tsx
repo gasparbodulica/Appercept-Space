@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -13,9 +14,13 @@ import { AIAssistant } from '@/components/AIAssistant';
 import { ClientPortalSync } from '@/components/ClientPortalSync';
 import { SupabaseAuthSync } from '@/components/SupabaseAuthSync';
 import { WorkspaceBackupSync } from '@/components/WorkspaceBackupSync';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { toggleSidebar, setCommandPaletteOpen, openRowId } = useAppStore();
+  const isMobile = useIsMobile();
+  const mobileNavOpen = useAppStore((s) => s.mobileNavOpen);
+  const setMobileNavOpen = useAppStore((s) => s.setMobileNavOpen);
   const account = useCurrentAccount();
   const justSignedIn = useAppStore((s) => s.justSignedIn);
   const authChecked = useAppStore((s) => s.authChecked);
@@ -24,6 +29,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // screen for an already-signed-in device.
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => { setHydrated(true); }, []);
+
+  // Close the mobile drawer whenever the route changes (tapped a page).
+  const pathname = usePathname();
+  useEffect(() => { setMobileNavOpen(false); }, [pathname, setMobileNavOpen]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -86,9 +95,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'transparent' }}>
-      <Sidebar />
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', background: 'transparent' }}>
-        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {isMobile ? (
+        <>
+          {/* Slide-in drawer + backdrop on phones */}
+          {mobileNavOpen && (
+            <div className="mobile-nav-backdrop" onClick={() => setMobileNavOpen(false)} />
+          )}
+          <div style={{
+            position: 'fixed', top: 0, left: 0, height: '100dvh', zIndex: 70,
+            transform: mobileNavOpen ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 220ms ease', boxShadow: mobileNavOpen ? '4px 0 24px rgba(0,0,0,0.5)' : 'none',
+          }}>
+            <Sidebar />
+          </div>
+        </>
+      ) : (
+        <Sidebar />
+      )}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', background: 'transparent', minWidth: 0 }}>
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
           {children}
         </main>
         {openRowId && <RowDetailPanel />}

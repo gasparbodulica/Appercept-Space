@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase';
+import { useAppStore } from './store';
 
 // The localStorage key Zustand persist writes to (keep in sync with store.ts `name`).
 const PERSIST_KEY = 'appercept-space-store-v12';
@@ -22,6 +23,64 @@ const BACKUP_ID = 'main';
 function stripSession(parsed: { state?: Record<string, unknown> } | null): typeof parsed {
   if (parsed?.state && 'sessionAccountId' in parsed.state) parsed.state.sessionAccountId = null;
   return parsed;
+}
+
+// While we apply a remote change, suppress our own save so we don't echo it back.
+let applyingRemote = false;
+export function isApplyingRemote(): boolean { return applyingRemote; }
+
+/**
+ * Apply a cloud workspace blob to the LIVE store so the UI updates in real time
+ * (no page reload). The current browser's own login is preserved.
+ */
+export function applyCloudBlobLive(rawData: unknown, updatedAt: string): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const parsed = typeof rawData === 'string' ? JSON.parse(rawData) : (rawData as { state?: Record<string, unknown> });
+    if (!parsed?.state) return;
+    // Keep this browser's own session
+    let localSession: unknown = null;
+    try { localSession = (JSON.parse(localStorage.getItem(PERSIST_KEY) ?? '{}')?.state ?? {}).sessionAccountId ?? null; } catch { /* none */ }
+    parsed.state.sessionAccountId = localSession;
+
+    applyingRemote = true;
+    // Merge the cloud data fields into the live store (actions are untouched).
+    useAppStore.setState(parsed.state as Record<string, unknown>);
+    localStorage.setItem(SAVED_AT_KEY, updatedAt);
+    setTimeout(() => { applyingRemote = false; }, 150);
+  } catch {
+    applyingRemote = false;
+  }
+}
+
+/**
+ * Subscribe to live workspace changes from other users/devices via Supabase
+ * Realtime. Returns an unsubscribe function. Best-effort; no-op if unavailable.
+ */
+export function subscribeToWorkspace(): () => void {
+  const sb = supabase;
+  if (!isSupabaseConfigured || !sb) return () => {};
+  try {
+    const channel = sb
+      .channel('workspace_state_live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'workspace_state', filter: 'id=eq.main' },
+        (payload: { new?: { data?: unknown; updated_at?: string } }) => {
+          const row = payload.new;
+          if (!row?.data) return;
+          const updatedAt = String(row.updated_at ?? '');
+          const localSavedAt = (typeof localStorage !== 'undefined' && localStorage.getItem(SAVED_AT_KEY)) || '';
+          // Ignore our own echo or anything older than what we already have.
+          if (updatedAt && updatedAt <= localSavedAt) return;
+          applyCloudBlobLive(row.data, updatedAt);
+        },
+      )
+      .subscribe();
+    return () => { try { sb.removeChannel(channel); } catch { /* ignore */ } };
+  } catch {
+    return () => {};
+  }
 }
 
 /** Push the current localStorage store blob (minus the session) to Supabase. */

@@ -666,7 +666,12 @@ alter table public.invite_links enable row level security;
 drop policy if exists "invite read"  on public.invite_links;
 drop policy if exists "invite write" on public.invite_links;
 create policy "invite read"  on public.invite_links for select to anon, authenticated using ( true );
-create policy "invite write" on public.invite_links for insert to anon, authenticated with check ( true );`;
+create policy "invite write" on public.invite_links for insert to anon, authenticated with check ( true );
+
+-- 8. REAL-TIME: broadcast workspace changes to every open browser instantly.
+do $$ begin
+  alter publication supabase_realtime add table public.workspace_state;
+exception when duplicate_object then null; end $$;`;
 
   const copySql = () => {
     navigator.clipboard.writeText(rlsSql).then(() => {

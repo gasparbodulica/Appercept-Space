@@ -6,7 +6,7 @@ import { isSupabaseConfigured, signInSupabase, signUpSupabase, sendResetEmail } 
 import { IconLock, IconMail, IconUser, IconShieldCheck, IconClock, IconLogout } from '@tabler/icons-react';
 
 export function AuthScreen() {
-  const { signIn, signUp, signOut, requestResetCode, confirmReset, workspace, pendingInvites, loginAsLocalAdmin } = useAppStore();
+  const { signIn, signUp, signOut, requestResetCode, confirmReset, workspace, pendingInvites, loginAsLocalAdmin, signInLocalFirst } = useAppStore();
   const account = useCurrentAccount();
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin');
   const [resetStep, setResetStep] = useState<'request' | 'verify'>('request');
@@ -66,14 +66,16 @@ export function AuthScreen() {
   const submit = () => {
     setError(''); setNotice('');
     if (mode === 'reset') { void handleReset(); return; }
-    // Emergency admin bypass — the built-in owner account can always log in locally,
-    // even when Supabase is connected, so you're never locked out of your own workspace.
+    // Emergency owner bypass — bulletproof, always works.
     if (mode === 'signin'
         && email.trim().toLowerCase() === 'gbodulica@appercept.net'
         && password === 'appercept') {
       loginAsLocalAdmin();
       return;
     }
+    // Built-in team admins (and any seed/local account) log in locally, even with
+    // Supabase connected. Falls through to Supabase for real cloud accounts.
+    if (mode === 'signin' && signInLocalFirst(email, password).ok) return;
     if (isSupabaseConfigured) { void handleSupabaseAuth(); return; }
     // Local prototype fallback
     const res = mode === 'signin' ? signIn(email, password) : signUp(name, email, password);

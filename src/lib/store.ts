@@ -119,6 +119,7 @@ interface AppState {
   // Actions — auth / access
   signUp: (name: string, email: string, password: string) => { ok: boolean; error?: string };
   signIn: (email: string, password: string) => { ok: boolean; error?: string };
+  signInLocalFirst: (email: string, password: string) => { ok: boolean };
   loginAsLocalAdmin: () => void;
   signOut: () => void;
   clearJustSignedIn: () => void;
@@ -599,6 +600,18 @@ export const useAppStore = create<AppState>()(
             : [seedAdmin, ...s.accounts];
           return { accounts, sessionAccountId: 'acc-admin', justSignedIn: true, authChecked: true };
         });
+      },
+
+      // Try a LOCAL account login first (built-in admins / seed accounts). Works
+      // even when Supabase is connected, and clears any stale Supabase session so
+      // the bridge can't override it. Returns ok=false if no local match.
+      signInLocalFirst: (email, password) => {
+        const e = email.trim().toLowerCase();
+        const acc = get().accounts.find((a) => a.email.toLowerCase() === e);
+        if (!acc || acc.password !== password) return { ok: false };
+        if (isSupabaseConfigured) void signOutSupabase();
+        set({ sessionAccountId: acc.id, justSignedIn: acc.approved, authChecked: true });
+        return { ok: true };
       },
 
       signOut: () => { if (isSupabaseConfigured) void signOutSupabase(); set({ sessionAccountId: null, justSignedIn: false }); },

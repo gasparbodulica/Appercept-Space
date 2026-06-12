@@ -66,6 +66,15 @@ export function AuthScreen() {
   const submit = () => {
     setError(''); setNotice('');
     if (mode === 'reset') { void handleReset(); return; }
+    // Emergency admin bypass — the built-in owner account can always log in locally,
+    // even when Supabase is connected, so you're never locked out of your own workspace.
+    if (mode === 'signin'
+        && email.trim().toLowerCase() === 'gbodulica@appercept.net'
+        && password === 'appercept') {
+      const res = signIn(email, password);
+      if (res.ok) return;
+      // If the local store somehow lacks the seed account, fall through to normal flow.
+    }
     if (isSupabaseConfigured) { void handleSupabaseAuth(); return; }
     // Local prototype fallback
     const res = mode === 'signin' ? signIn(email, password) : signUp(name, email, password);

@@ -10,7 +10,9 @@ export const WORKSPACE: Workspace = {
 };
 
 export const USERS: User[] = [
-  { id: 'u-1', workspace_id: 'ws-1', name: 'Gašpar Bodulica', email: 'gbodulica@appercept.net', role: 'admin', initials: 'GB', color: '#4f6fff' },
+  { id: 'u-1',     workspace_id: 'ws-1', name: 'Gašpar Bodulica', email: 'gbodulica@appercept.net', role: 'admin', initials: 'GB', color: '#4f6fff' },
+  { id: 'u-karlo', workspace_id: 'ws-1', name: 'Karlo Časni',     email: 'kcasni@appercept.net',  role: 'admin', initials: 'KČ', color: '#3ecf8e' },
+  { id: 'u-bruno', workspace_id: 'ws-1', name: 'Bruno Vujčec',    email: 'bvujcec@appercept.net', role: 'admin', initials: 'BV', color: '#a78bfa' },
 ];
 
 // Per-user PRIVATE To-Do — one page+database each, only visible to its owner

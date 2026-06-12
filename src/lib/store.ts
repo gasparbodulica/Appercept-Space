@@ -1217,7 +1217,14 @@ export const useAppStore = create<AppState>()(
           databases: mergedDatabases,
           // Strip demo team members everywhere (workspace users + revenue roles),
           // by ID so re-adding people later is never blocked.
-          users: (p.users ?? current.users).filter((u) => !REMOVED_DEMO_USER_IDS.includes(u.id)),
+          // Keep persisted user edits, drop demo users, AND always include any
+          // seed team members (e.g. Karlo, Bruno) that aren't persisted yet — so
+          // built-in team accounts show up everywhere (messaging, person columns).
+          users: (() => {
+            const persistedUsers = (p.users ?? []).filter((u) => !REMOVED_DEMO_USER_IDS.includes(u.id));
+            const missingSeed = USERS.filter((su) => !persistedUsers.some((pu) => pu.id === su.id));
+            return persistedUsers.length > 0 ? [...persistedUsers, ...missingSeed] : USERS;
+          })(),
           teamRoles: (p.teamRoles ?? current.teamRoles).filter((r) => !REMOVED_DEMO_ROLE_IDS.includes(r.id)),
           // Seed pages keep their slot/order but adopt any persisted edits
           // (rename/icon/colour); user-created pages are appended after.

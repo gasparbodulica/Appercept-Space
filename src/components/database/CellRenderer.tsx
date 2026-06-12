@@ -303,20 +303,28 @@ function EditCell({ column, value, onChange, onBlur, onTab, anchorRect }: {
   };
 
   const addOpt = (label: string) => useAppStore.getState().addColumnOption(column.database_id, column.id, label);
+  const delOpt = (label: string) => {
+    const opt = column.config.options?.find(o => o.label === label);
+    if (opt) useAppStore.getState().deleteColumnOption(column.database_id, column.id, opt.id);
+  };
 
   if (column.type === 'status') {
+    // If custom options are defined (e.g. Costs = Active/Past), show ONLY those.
+    // Otherwise fall back to the built-in workflow statuses.
     const builtIn = ['Not started','In progress','Started','Done','Completed','Blocked'];
-    const custom = (column.config.options ?? []).map(o => o.label).filter(l => !builtIn.includes(l));
-    return <SelectDropdown options={[...builtIn, ...custom]} value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect} getColor={getStatusConfig} getColorFromOptions={column.config.options} onCreate={addOpt} />;
+    const customOpts = (column.config.options ?? []).map(o => o.label);
+    const options = customOpts.length > 0 ? customOpts : builtIn;
+    return <SelectDropdown options={options} value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect} getColor={getStatusConfig} getColorFromOptions={column.config.options} onCreate={addOpt} onDelete={delOpt} />;
   }
   if (column.type === 'priority') {
     const builtIn = ['High','Medium','Low'];
-    const custom = (column.config.options ?? []).map(o => o.label).filter(l => !builtIn.includes(l));
-    return <SelectDropdown options={[...builtIn, ...custom]} value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect} getColor={getPriorityConfig} getColorFromOptions={column.config.options} onCreate={addOpt} />;
+    const customOpts = (column.config.options ?? []).map(o => o.label);
+    const options = customOpts.length > 0 ? customOpts : builtIn;
+    return <SelectDropdown options={options} value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect} getColor={getPriorityConfig} getColorFromOptions={column.config.options} onCreate={addOpt} onDelete={delOpt} />;
   }
   if (column.type === 'select') {
     return <SelectDropdown options={(column.config.options ?? []).map(o => o.label)} value={String(value ?? '')} onChange={onChange} onClose={onBlur} anchorRect={anchorRect}
-      getColorFromOptions={column.config.options} onCreate={addOpt} />;
+      getColorFromOptions={column.config.options} onCreate={addOpt} onDelete={delOpt} />;
   }
   if (column.type === 'multi_select' || column.type === 'tags') {
     const tagBuiltIn = ['IG','TT','LIN','Dev','Contract','Call','Info','PPTX'];
@@ -503,7 +511,7 @@ function SearchInput({ value, onChange, placeholder = 'Search…' }: { value: st
 
 type ColorConfig = { color: string; bg: string; icon?: string };
 
-function SelectDropdown({ options, value, onChange, onClose, anchorRect, getColor, getColorFromOptions, onCreate }: {
+function SelectDropdown({ options, value, onChange, onClose, anchorRect, getColor, getColorFromOptions, onCreate, onDelete }: {
   options: string[];
   value: string;
   onChange: (v: CellValue) => void;
@@ -512,6 +520,7 @@ function SelectDropdown({ options, value, onChange, onClose, anchorRect, getColo
   getColor?: (v: string) => ColorConfig;
   getColorFromOptions?: { id: string; label: string; color: string }[];
   onCreate?: (label: string) => void;
+  onDelete?: (label: string) => void;
 }) {
   const [q, setQ] = useState('');
   const filtered = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options;
@@ -533,6 +542,8 @@ function SelectDropdown({ options, value, onChange, onClose, anchorRect, getColo
         {filtered.map(opt => {
           const cfg = getOptColor(opt);
           const active = opt === value;
+          // Deletable only if this option is a real custom option (in config.options).
+          const deletable = !!onDelete && !!getColorFromOptions?.some(o => o.label === opt);
           return (
             <div key={opt} onClick={() => { onChange(opt); onClose(); }}
               style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, background: active ? 'var(--color-bg-active)' : 'transparent', transition: 'background 60ms' }}
@@ -546,7 +557,20 @@ function SelectDropdown({ options, value, onChange, onClose, anchorRect, getColo
                   </span>
                 : <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)' }}>{opt}</span>
               }
-              {active && <span style={{ marginLeft: 'auto', color: 'var(--color-accent)', fontWeight: 700 }}>✓</span>}
+              <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {active && <span style={{ color: 'var(--color-accent)', fontWeight: 700 }}>✓</span>}
+                {deletable && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDelete!(opt); }}
+                    title={`Delete "${opt}" option`}
+                    style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', borderRadius: 4 }}
+                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'var(--color-bg-active)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'none'; }}
+                  >
+                    <IconX size={12} />
+                  </button>
+                )}
+              </span>
             </div>
           );
         })}

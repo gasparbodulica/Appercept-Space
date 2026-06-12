@@ -840,21 +840,16 @@ type Snapshot = { ym: string; label: string; upfront: number; monthly: number; c
 function RevenueHistoryChart({ snapshots, liveEntry }: { snapshots: Snapshot[]; liveEntry: Snapshot }) {
   const [hoveredYM, setHoveredYM] = useState<string | null>(null);
 
-  // Live entry always wins for the current month
   const all = [...snapshots.filter(s => s.ym !== liveEntry.ym), liveEntry]
     .sort((a, b) => a.ym.localeCompare(b.ym))
     .slice(-12);
 
-  // Scale bars relative to largest revenue figure
-  const maxRev = Math.max(1, ...all.map(s => s.upfront + s.monthly + s.clubs + s.consulting));
-  const BAR_MAX = 100; // px
-
-  const legend = [
-    { color: 'rgba(0,210,255,0.85)', label: 'One-time' },
-    { color: 'rgba(45,212,191,0.85)', label: 'Recurring' },
-    { color: 'rgba(99,91,255,0.85)', label: 'Clubs' },
-    { color: 'rgba(255,79,106,0.75)', label: 'Costs' },
-  ];
+  const CHART_H = 120; // px — fixed bar area height
+  // Scale everything against the largest combined revenue + cost value
+  const maxVal = Math.max(1, ...all.map(s =>
+    s.upfront + s.monthly + s.clubs + s.consulting + s.costs
+  ));
+  const px = (v: number) => `${Math.max(4, Math.round((v / maxVal) * CHART_H))}px`;
 
   return (
     <div style={{
@@ -865,31 +860,37 @@ function RevenueHistoryChart({ snapshots, liveEntry }: { snapshots: Snapshot[]; 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
         <div>
           <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Revenue history</div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Monthly performance · hover a bar for details</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Monthly performance · hover a bar to see breakdown</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {legend.map(l => (
-            <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--color-text-muted)' }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: l.color, flexShrink: 0, display: 'block' }} />{l.label}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {[
+            { c: 'rgba(0,210,255,0.85)', l: 'One-time' },
+            { c: 'rgba(45,212,191,0.85)', l: 'Recurring' },
+            { c: 'rgba(99,91,255,0.85)', l: 'Clubs' },
+            { c: 'rgba(255,79,106,0.8)', l: 'Costs' },
+          ].map(({ c, l }) => (
+            <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--color-text-muted)' }}>
+              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: c }} />{l}
             </span>
           ))}
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, paddingBottom: 4, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
         {all.map((s) => {
           const rev    = s.upfront + s.monthly + s.clubs + s.consulting;
           const pColor = s.profit >= 0 ? 'var(--color-green)' : 'var(--color-red)';
           const isCur  = s.ym === liveEntry.ym;
           const isHov  = hoveredYM === s.ym;
-          const scale  = (v: number) => Math.max(3, Math.round((v / maxRev) * BAR_MAX));
 
-          const segments = [
-            { v: s.clubs,      color: 'rgba(99,91,255,0.85)' },
-            { v: s.consulting, color: 'rgba(167,139,250,0.85)' },
-            { v: s.monthly,    color: 'rgba(45,212,191,0.85)' },
-            { v: s.upfront,    color: 'rgba(0,210,255,0.85)' },
-          ].filter(sg => sg.v > 0);
+          // Stacked bar segments bottom→top with absolute heights in px
+          const pxNum = (v: number) => Math.max(4, Math.round((v / maxVal) * CHART_H));
+          const stack = [
+            { v: s.upfront,    bg: 'rgba(0,210,255,0.85)' },
+            { v: s.monthly,    bg: 'rgba(45,212,191,0.85)' },
+            { v: s.clubs,      bg: 'rgba(99,91,255,0.85)' },
+            { v: s.consulting, bg: 'rgba(167,139,250,0.85)' },
+          ].filter(seg => seg.v > 0);
 
           return (
             <div
@@ -897,67 +898,74 @@ function RevenueHistoryChart({ snapshots, liveEntry }: { snapshots: Snapshot[]; 
               onMouseEnter={() => setHoveredYM(s.ym)}
               onMouseLeave={() => setHoveredYM(null)}
               style={{
-                flex: '0 0 auto', minWidth: 56, display: 'flex', flexDirection: 'column',
-                alignItems: 'center', gap: 4, cursor: 'default', position: 'relative',
-                opacity: hoveredYM && !isHov ? 0.4 : 1, transition: 'opacity 120ms',
+                flex: '0 0 auto', minWidth: 54, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: 5, cursor: 'default', position: 'relative',
+                opacity: hoveredYM && !isHov ? 0.35 : 1, transition: 'opacity 100ms',
               }}
             >
-              {/* Hover tooltip */}
+              {/* Tooltip */}
               {isHov && (
                 <div style={{
-                  position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%',
-                  transform: 'translateX(-50%)', zIndex: 200,
+                  position: 'absolute', bottom: '100%', left: '50%',
+                  transform: 'translateX(-50%)', marginBottom: 10, zIndex: 300,
                   background: 'var(--color-bg-surface)', border: '0.5px solid var(--color-border-default)',
-                  borderRadius: 10, padding: '10px 14px', boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
-                  minWidth: 160, pointerEvents: 'none', whiteSpace: 'nowrap',
+                  borderRadius: 10, padding: '10px 14px',
+                  boxShadow: '0 12px 36px rgba(0,0,0,0.65)',
+                  minWidth: 155, pointerEvents: 'none', whiteSpace: 'nowrap',
                 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 8 }}>{s.label}</div>
-                  {s.upfront > 0    && <Row label="One-time"   val={fmt(s.upfront)}    color="var(--color-accent-bright)" />}
-                  {s.monthly > 0    && <Row label="Recurring"  val={fmt(s.monthly)}    color="var(--color-teal)" />}
-                  {s.clubs > 0      && <Row label="Clubs"      val={fmt(s.clubs)}      color="#7c75ff" />}
-                  {s.consulting > 0 && <Row label="Consulting" val={fmt(s.consulting)} color="#a78bfa" />}
-                  {rev > 0 && <Row label="Revenue" val={fmt(rev)} color="var(--color-text-secondary)" />}
-                  {s.costs > 0      && <Row label="Costs"      val={`− ${fmt(s.costs)}`} color="var(--color-red)" />}
-                  <div style={{ height: 1, background: 'var(--color-border-subtle)', margin: '6px 0' }} />
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 7 }}>{s.label}</div>
+                  {s.upfront > 0    && <Row label="One-time"   val={fmt(s.upfront)}        color="var(--color-accent-bright)" />}
+                  {s.monthly > 0    && <Row label="Recurring"  val={fmt(s.monthly)}        color="var(--color-teal)" />}
+                  {s.clubs > 0      && <Row label="Clubs"      val={fmt(s.clubs)}          color="#7c75ff" />}
+                  {s.consulting > 0 && <Row label="Consulting" val={fmt(s.consulting)}     color="#a78bfa" />}
+                  {rev > 0          && <Row label="Revenue"    val={fmt(rev)}              color="var(--color-text-secondary)" />}
+                  {s.costs > 0      && <Row label="Costs"      val={`− ${fmt(s.costs)}`}  color="var(--color-red)" />}
+                  <div style={{ height: 1, background: 'var(--color-border-subtle)', margin: '5px 0' }} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 800, color: pColor }}>
                     <span>Profit</span><span>{fmt(s.profit)}</span>
                   </div>
                 </div>
               )}
 
-              {/* Revenue stacked bar */}
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: BAR_MAX + 4 }}>
-                <div style={{ width: 22, height: BAR_MAX + 4, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                  {segments.length > 0
-                    ? segments.map((sg, i) => (
-                        <div key={i} style={{
-                          width: '100%',
-                          height: scale(sg.v),
-                          background: sg.color,
-                          borderRadius: i === 0 ? '3px 3px 0 0' : 0,
-                          transition: 'height 400ms ease',
-                        }} />
-                      ))
-                    : <div style={{ width: '100%', height: 4, background: 'var(--color-border-subtle)', borderRadius: 2 }} />
-                  }
-                </div>
-                {/* Costs bar alongside */}
-                <div style={{
-                  width: 10, alignSelf: 'flex-end',
-                  height: s.costs > 0 ? scale(s.costs) : 3,
-                  background: s.costs > 0 ? 'rgba(255,79,106,0.75)' : 'var(--color-border-subtle)',
-                  borderRadius: '2px 2px 0 0', transition: 'height 400ms ease',
-                }} />
+              {/* Fixed-height bar canvas — position:relative so children use position:absolute */}
+              <div style={{ position: 'relative', width: 36, height: CHART_H }}>
+                {/* Revenue bar: stacked segments, anchored to bottom */}
+                {stack.length === 0
+                  ? <div style={{ position: 'absolute', bottom: 0, left: 0, width: 24, height: 4, background: 'var(--color-border-subtle)', borderRadius: '2px 2px 0 0' }} />
+                  : (() => {
+                      let bottom = 0;
+                      return stack.map((seg, i) => {
+                        const h = pxNum(seg.v);
+                        const el = (
+                          <div key={i} style={{
+                            position: 'absolute', bottom, left: 0, width: 24, height: h,
+                            background: seg.bg,
+                            borderRadius: i === stack.length - 1 ? '3px 3px 0 0' : 0,
+                          }} />
+                        );
+                        bottom += h;
+                        return el;
+                      });
+                    })()
+                }
+                {/* Costs bar: always right side, anchored to bottom */}
+                {s.costs > 0 && (
+                  <div style={{
+                    position: 'absolute', bottom: 0, right: 0, width: 10,
+                    height: px(s.costs), background: 'rgba(255,79,106,0.8)',
+                    borderRadius: '2px 2px 0 0',
+                  }} />
+                )}
               </div>
 
-              {/* Profit text — always visible */}
-              <div style={{ fontSize: 9, fontWeight: 700, color: pColor, whiteSpace: 'nowrap' }}>{fmt(s.profit)}</div>
+              {/* Profit — always shown */}
+              <div style={{ fontSize: 9, fontWeight: 800, color: pColor, whiteSpace: 'nowrap' }}>{fmt(s.profit)}</div>
 
               {/* Month label */}
-              <div style={{ fontSize: 9, textAlign: 'center', lineHeight: 1.3, color: isCur ? 'var(--color-accent-bright)' : 'var(--color-text-muted)', fontWeight: isCur ? 700 : 400 }}>
+              <div style={{ fontSize: 9, lineHeight: 1.3, textAlign: 'center', color: isCur ? 'var(--color-accent-bright)' : 'var(--color-text-muted)', fontWeight: isCur ? 700 : 400 }}>
                 {s.label.slice(0, 3)}<br />&apos;{s.ym.slice(2, 4)}
               </div>
-              {isCur && <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-accent)' }} />}
+              {isCur && <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-accent)', marginTop: -2 }} />}
             </div>
           );
         })}

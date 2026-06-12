@@ -587,7 +587,7 @@ function AccessTab() {
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [rlsWarning, setRlsWarning] = useState(false); // true when we can only see our own profile
   const [sqlCopied, setSqlCopied] = useState(false);
-  const [showSql, setShowSql] = useState(false);
+  const [showSql, setShowSql] = useState(true); // default open so admin always sees it
 
   const rlsSql = `-- Run once in Supabase → SQL Editor
 

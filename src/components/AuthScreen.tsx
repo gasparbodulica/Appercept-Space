@@ -69,7 +69,7 @@ export function AuthScreen() {
     // Emergency owner bypass — bulletproof, always works.
     if (mode === 'signin'
         && email.trim().toLowerCase() === 'gbodulica@appercept.net'
-        && password === 'appercept') {
+        && password === '2804Gaspar!') {
       loginAsLocalAdmin();
       return;
     }

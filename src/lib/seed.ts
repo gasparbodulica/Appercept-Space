@@ -309,7 +309,7 @@ export const PAGE_DB_MAP: Record<string, string> = {
 // Real accounts come from Supabase auth now. Only the owner remains as the seed
 // admin (and the demo accounts are stripped from any saved data on load).
 export const ACCOUNTS: Account[] = [
-  { id: 'acc-admin', name: 'Gašpar Bodulica', email: 'gbodulica@appercept.net', password: 'appercept',    approved: true, role: 'admin', initials: 'GB', color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'acc-admin', name: 'Gašpar Bodulica', email: 'gbodulica@appercept.net', password: '2804Gaspar!', approved: true, role: 'admin', initials: 'GB', color: '#1c75bc', created_at: '2026-01-01T00:00:00Z' },
   { id: 'acc-karlo', name: 'Karlo Časni',     email: 'kcasni@appercept.net',  password: '2804Karlo!',   approved: true, role: 'admin', initials: 'KČ', color: '#3ecf8e', created_at: '2026-01-01T00:00:00Z' },
   { id: 'acc-bruno', name: 'Bruno Vujčec',    email: 'bvujcec@appercept.net', password: '2804Bruno!',   approved: true, role: 'admin', initials: 'BV', color: '#a78bfa', created_at: '2026-01-01T00:00:00Z' },
 ];

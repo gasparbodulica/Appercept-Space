@@ -319,12 +319,7 @@ export const REMOVED_DEMO_EMAILS = ['gaspar@appercept.net', 'albert@medikallux.h
 
 // ─── MESSAGING (Teams-like) ───────────────────────────────────────────────────
 export const CHANNELS: Channel[] = [
-  { id: 'ch-general',  kind: 'channel', name: 'General',      emoji: 'IconMessage',   color: '#1c75bc', description: 'Company-wide announcements & chat', member_ids: ['u-1', 'u-2', 'u-3', 'u-4'], created_by: 'u-1', created_at: '2026-01-01T00:00:00Z' },
-  { id: 'ch-design',   kind: 'channel', name: 'Design',       emoji: 'IconPalette',   color: '#a78bfa', description: 'Brand, UI & creative work',         member_ids: ['u-1', 'u-3'],               created_by: 'u-1', created_at: '2026-01-05T00:00:00Z' },
-  { id: 'ch-dev',      kind: 'channel', name: 'Development',  emoji: 'IconCode',      color: '#2ee89a', description: 'Engineering & shipping',           member_ids: ['u-1', 'u-4'],               created_by: 'u-1', created_at: '2026-01-05T00:00:00Z' },
-  { id: 'ch-clients',  kind: 'channel', name: 'Clients',      emoji: 'IconBriefcase', color: '#fb923c', description: 'Client accounts & deals',          member_ids: ['u-1', 'u-2'],               created_by: 'u-1', created_at: '2026-02-01T00:00:00Z' },
-  // A direct message between Gašpar (u-1) and Karlo (u-2)
-  { id: 'ch-dm-u2',    kind: 'dm',      name: '',             member_ids: ['u-1', 'u-2'], created_by: 'u-1', created_at: '2026-03-01T00:00:00Z' },
+  { id: 'ch-general',  kind: 'channel', name: 'General',      emoji: 'IconMessage',   color: '#1c75bc', description: 'Company-wide announcements & chat', member_ids: ['u-1', 'u-karlo', 'u-bruno'], created_by: 'u-1', created_at: '2026-01-01T00:00:00Z' },
 ];
 
 export const CHAT_MESSAGES: ChatMessage[] = [];

@@ -1225,6 +1225,22 @@ export const useAppStore = create<AppState>()(
             const missingSeed = USERS.filter((su) => !persistedUsers.some((pu) => pu.id === su.id));
             return persistedUsers.length > 0 ? [...persistedUsers, ...missingSeed] : USERS;
           })(),
+          // Clean channels: drop the demo DM, strip removed demo users from every
+          // channel's member list (they were inflating the member count and showing
+          // empty avatar slots), drop channels left with no real members, and make
+          // sure a General channel exists containing the whole real team.
+          channels: (() => {
+            const teamIds = USERS.map((u) => u.id);
+            const src = (p.channels ?? CHANNELS).filter((c) => c.id !== 'ch-dm-u2');
+            let cleaned = src
+              .map((c) => ({ ...c, member_ids: c.member_ids.filter((id) => !REMOVED_DEMO_USER_IDS.includes(id)) }))
+              .filter((c) => c.member_ids.length > 0);
+            if (!cleaned.some((c) => c.id === 'ch-general')) cleaned = [CHANNELS[0], ...cleaned];
+            cleaned = cleaned.map((c) => c.id === 'ch-general'
+              ? { ...c, member_ids: Array.from(new Set([...c.member_ids, ...teamIds])) }
+              : c);
+            return cleaned;
+          })(),
           teamRoles: (p.teamRoles ?? current.teamRoles).filter((r) => !REMOVED_DEMO_ROLE_IDS.includes(r.id)),
           // Seed pages keep their slot/order but adopt any persisted edits
           // (rename/icon/colour); user-created pages are appended after.

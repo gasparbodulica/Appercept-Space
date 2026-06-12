@@ -20,8 +20,18 @@ export function SupabaseAuthSync() {
     if (!isSupabaseConfigured || !supabase) { setAuthChecked(true); return; }
     let active = true;
 
+    // Clear the session ONLY if the current login came from Supabase. A locally
+    // authenticated account (seed/emergency admin, id starts with 'acc-') must be
+    // left alone — otherwise the bridge logs the local admin straight back out.
+    const clearIfSupabaseSession = () => {
+      const { accounts, sessionAccountId } = useAppStore.getState();
+      const current = accounts.find(a => a.id === sessionAccountId);
+      const isLocalAccount = !sessionAccountId || (current?.id ?? '').startsWith('acc-');
+      if (!isLocalAccount) setAuthedAccount(null);
+    };
+
     const apply = async (userId: string | undefined, justSignedIn: boolean) => {
-      if (!userId) { setAuthedAccount(null); return; }
+      if (!userId) { clearIfSupabaseSession(); return; }
       const acc = await fetchProfile(userId);
       if (active && acc) {
         // Check if admin pre-registered this email — auto-approve and use the admin's name
@@ -48,7 +58,7 @@ export function SupabaseAuthSync() {
         if (firstName) {
           document.cookie = `appercept_fn=${encodeURIComponent(firstName)}; domain=.appercept.net; max-age=${365 * 24 * 3600}; path=/; SameSite=Lax; Secure`;
         }
-      } else if (active) setAuthedAccount(null);
+      } else if (active) clearIfSupabaseSession();
     };
 
     // 1) Resolve the existing session on load — treat a remembered session as

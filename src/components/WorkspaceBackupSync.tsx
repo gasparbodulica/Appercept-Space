@@ -5,7 +5,7 @@ import { useAppStore } from '@/lib/store';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import {
   saveWorkspaceBackup, maybeRestoreWorkspaceBackup,
-  subscribeToWorkspace, isApplyingRemote,
+  subscribeToWorkspace, isApplyingRemote, markRestoreComplete,
 } from '@/lib/workspaceBackup';
 
 /**
@@ -25,7 +25,9 @@ export function WorkspaceBackupSync() {
     if (!isSupabaseConfigured || restoredRef.current) return;
     restoredRef.current = true;
     void maybeRestoreWorkspaceBackup().then((restored) => {
-      if (restored) window.location.reload();
+      if (restored) { window.location.reload(); return; }
+      // Only allow saves once we've confirmed we're not about to clobber the cloud.
+      markRestoreComplete();
     });
   }, []);
 

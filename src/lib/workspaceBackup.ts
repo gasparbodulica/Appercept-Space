@@ -9,15 +9,42 @@ const SAVED_AT_KEY = 'appercept-backup-savedAt';
 const BACKUP_ID = 'main';
 
 /**
- * Cloud backup of the whole workspace so data survives cache clears / new devices.
- * The entire persisted Zustand blob (projects, venues, members, logo, everything)
- * is stored as one JSON document in Supabase.
+ * Cloud backup of the whole workspace so data survives cache clears / new devices,
+ * and syncs live across browsers.
  *
- * IMPORTANT: the per-browser login (sessionAccountId) is stripped from the backup
- * and preserved locally on restore — so pulling the shared workspace onto another
- * browser never hijacks whoever is (or isn't) logged in there.
+ * SAFETY: the backup must NEVER overwrite good data with an empty workspace. Three
+ * guards enforce this:
+ *   1. No save happens until the initial restore has completed (prevents a fresh
+ *      page-load seed from racing ahead and clobbering the cloud).
+ *   2. A local store with 0 rows never overwrites a cloud that has rows.
+ *   3. A remote/cloud blob with 0 rows is never applied over a local store that
+ *      has rows.
  * All ops are best-effort and never throw.
  */
+
+// Saves are blocked until the first restore resolves.
+let restoreComplete = false;
+export function markRestoreComplete(): void { restoreComplete = true; }
+
+// Last known number of rows in the cloud copy (−1 = unknown).
+let lastCloudRows = -1;
+
+// While we apply a remote change, suppress our own save so we don't echo it back.
+let applyingRemote = false;
+export function isApplyingRemote(): boolean { return applyingRemote; }
+
+/** Total rows across all databases in a persisted state object (data richness). */
+function countRows(state: Record<string, unknown> | undefined): number {
+  try {
+    const dbs = (state?.databases ?? {}) as Record<string, { rows?: unknown[] }>;
+    return Object.values(dbs).reduce((n, d) => n + (Array.isArray(d?.rows) ? d.rows.length : 0), 0);
+  } catch { return 0; }
+}
+
+function parseBlob(raw: unknown): { state?: Record<string, unknown> } | null {
+  try { return typeof raw === 'string' ? JSON.parse(raw) : (raw as { state?: Record<string, unknown> }); }
+  catch { return null; }
+}
 
 /** Remove the session field from a persisted-store object (mutates a copy). */
 function stripSession(parsed: { state?: Record<string, unknown> } | null): typeof parsed {
@@ -25,38 +52,38 @@ function stripSession(parsed: { state?: Record<string, unknown> } | null): typeo
   return parsed;
 }
 
-// While we apply a remote change, suppress our own save so we don't echo it back.
-let applyingRemote = false;
-export function isApplyingRemote(): boolean { return applyingRemote; }
-
 /**
- * Apply a cloud workspace blob to the LIVE store so the UI updates in real time
- * (no page reload). The current browser's own login is preserved.
+ * Apply a cloud workspace blob to the LIVE store so the UI updates in real time.
+ * Skips applying an EMPTY remote over a populated local store.
  */
 export function applyCloudBlobLive(rawData: unknown, updatedAt: string): void {
   try {
     if (typeof localStorage === 'undefined') return;
-    const parsed = typeof rawData === 'string' ? JSON.parse(rawData) : (rawData as { state?: Record<string, unknown> });
+    const parsed = parseBlob(rawData);
     if (!parsed?.state) return;
+
+    const remoteRows = countRows(parsed.state);
+    const localParsed = parseBlob(localStorage.getItem(PERSIST_KEY));
+    const localRows = countRows(localParsed?.state);
+    // Guard 3: never wipe a populated local store with an empty remote.
+    if (remoteRows === 0 && localRows > 0) return;
+
     // Keep this browser's own session
     let localSession: unknown = null;
-    try { localSession = (JSON.parse(localStorage.getItem(PERSIST_KEY) ?? '{}')?.state ?? {}).sessionAccountId ?? null; } catch { /* none */ }
+    try { localSession = (localParsed?.state ?? {}).sessionAccountId ?? null; } catch { /* none */ }
     parsed.state.sessionAccountId = localSession;
 
     applyingRemote = true;
-    // Merge the cloud data fields into the live store (actions are untouched).
     useAppStore.setState(parsed.state as Record<string, unknown>);
     localStorage.setItem(SAVED_AT_KEY, updatedAt);
+    lastCloudRows = remoteRows;
     setTimeout(() => { applyingRemote = false; }, 150);
   } catch {
     applyingRemote = false;
   }
 }
 
-/**
- * Subscribe to live workspace changes from other users/devices via Supabase
- * Realtime. Returns an unsubscribe function. Best-effort; no-op if unavailable.
- */
+/** Subscribe to live workspace changes from other users/devices. */
 export function subscribeToWorkspace(): () => void {
   const sb = supabase;
   if (!isSupabaseConfigured || !sb) return () => {};
@@ -71,8 +98,7 @@ export function subscribeToWorkspace(): () => void {
           if (!row?.data) return;
           const updatedAt = String(row.updated_at ?? '');
           const localSavedAt = (typeof localStorage !== 'undefined' && localStorage.getItem(SAVED_AT_KEY)) || '';
-          // Ignore our own echo or anything older than what we already have.
-          if (updatedAt && updatedAt <= localSavedAt) return;
+          if (updatedAt && updatedAt <= localSavedAt) return; // own echo / older
           applyCloudBlobLive(row.data, updatedAt);
         },
       )
@@ -87,26 +113,35 @@ export function subscribeToWorkspace(): () => void {
 export async function saveWorkspaceBackup(): Promise<void> {
   try {
     if (!isSupabaseConfigured || !supabase || typeof localStorage === 'undefined') return;
+    // Guard 1: don't save until the first restore has resolved.
+    if (!restoreComplete) return;
     const blob = localStorage.getItem(PERSIST_KEY);
     if (!blob) return;
-    let payload = blob;
-    try { payload = JSON.stringify(stripSession(JSON.parse(blob))); } catch { /* keep raw */ }
+
+    const parsed = parseBlob(blob);
+    const localRows = countRows(parsed?.state);
+    // Guard 2: never overwrite a cloud that has data with an empty local store.
+    if (localRows === 0 && lastCloudRows > 0) return;
+
+    const payload = JSON.stringify(stripSession(parsed)) ?? blob;
     const updatedAt = new Date().toISOString();
     const { error } = await supabase
       .from('workspace_state')
       .upsert({ id: BACKUP_ID, data: payload, updated_at: updatedAt }, { onConflict: 'id' });
-    if (!error) localStorage.setItem(SAVED_AT_KEY, updatedAt);
+    if (!error) {
+      localStorage.setItem(SAVED_AT_KEY, updatedAt);
+      lastCloudRows = localRows;
+    }
   } catch {
-    /* best-effort; never break the app */
+    /* best-effort */
   }
 }
 
 /**
  * On load, decide whether the cloud copy should replace what's local.
  * Returns true if a restore happened (caller should reload the page).
- * Restores when the cloud backup is newer than our last local sync — which
- * covers a freshly-cleared browser (no marker) and other devices.
- * The current browser's own login is always kept, never overwritten.
+ * Restores when the cloud is newer OR when local is empty but cloud has data.
+ * Never wipes a populated local store with an empty cloud.
  */
 export async function maybeRestoreWorkspaceBackup(): Promise<boolean> {
   try {
@@ -118,25 +153,33 @@ export async function maybeRestoreWorkspaceBackup(): Promise<boolean> {
       .single();
     if (error || !data?.data) return false;
 
+    const parsed = parseBlob(data.data);
+    if (!parsed?.state) return false;
+
     const cloudUpdatedAt = String(data.updated_at ?? '');
     const localSavedAt = localStorage.getItem(SAVED_AT_KEY) ?? '';
     const localBlob = localStorage.getItem(PERSIST_KEY);
+    const localParsed = parseBlob(localBlob);
+
+    const cloudRows = countRows(parsed.state);
+    const localRows = countRows(localParsed?.state);
+    lastCloudRows = cloudRows;
 
     const cloudIsNewer = !localSavedAt || cloudUpdatedAt > localSavedAt;
-    if (localBlob && !cloudIsNewer) return false;
+    // Restore when: local is empty but cloud has data (recover), OR cloud is newer
+    // AND we wouldn't be wiping populated local data with an empty cloud.
+    const shouldRestore =
+      (localRows === 0 && cloudRows > 0) ||
+      (cloudIsNewer && !(cloudRows === 0 && localRows > 0) && (!localBlob || cloudRows >= localRows || cloudIsNewer));
 
-    // Preserve this browser's current login.
+    // Hard stop: never replace populated local with an empty cloud.
+    if (cloudRows === 0 && localRows > 0) return false;
+    if (localBlob && !cloudIsNewer && !(localRows === 0 && cloudRows > 0)) return false;
+    if (!shouldRestore) return false;
+
     let localSession: unknown = null;
-    try { localSession = (JSON.parse(localBlob ?? '{}')?.state ?? {}).sessionAccountId ?? null; } catch { /* none */ }
-
-    // Cloud data may be a JSON string or an object (jsonb). Normalise to an object.
-    let parsed: { state?: Record<string, unknown> };
-    try {
-      parsed = typeof data.data === 'string' ? JSON.parse(data.data) : (data.data as { state?: Record<string, unknown> });
-    } catch {
-      return false;
-    }
-    if (parsed?.state) parsed.state.sessionAccountId = localSession;
+    try { localSession = (localParsed?.state ?? {}).sessionAccountId ?? null; } catch { /* none */ }
+    if (parsed.state) parsed.state.sessionAccountId = localSession;
 
     localStorage.setItem(PERSIST_KEY, JSON.stringify(parsed));
     localStorage.setItem(SAVED_AT_KEY, cloudUpdatedAt);

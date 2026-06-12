@@ -583,117 +583,15 @@ function AccessTab() {
   const me = useCurrentAccount();
   const pending = accounts.filter((a) => !a.approved);
 
-  // Load all real Supabase profiles so self-sign-ups appear here for approval.
+  // Pull any real Supabase sign-ups so they appear here for approval (best-effort).
   const [loadingProfiles, setLoadingProfiles] = useState(false);
-  const [rlsWarning, setRlsWarning] = useState(false); // true when we can only see our own profile
-  const [sqlCopied, setSqlCopied] = useState(false);
-  const [showSql, setShowSql] = useState(true); // default open so admin always sees it
-  const [diag, setDiag] = useState<{ error: string | null; rawCount: number; emails: string[] } | null>(null);
-
-  const rlsSql = `-- Run this WHOLE block once in Supabase → SQL Editor
-
--- 1. Auto-create a profile row whenever someone signs up (the missing piece if
---    sign-ups never appear here — Supabase only makes an auth.users row by default).
-create or replace function public.handle_new_user()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  insert into public.profiles (id, name, email, role, approved)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'name', split_part(new.email,'@',1)),
-    new.email, 'member', false
-  )
-  on conflict (id) do nothing;
-  return new;
-end; $$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
-
--- 2. BACKFILL: create profiles for anyone who already signed up (e.g. Karlo) but
---    has no profile row yet. This makes existing sign-ups appear immediately.
-insert into public.profiles (id, name, email, role, approved)
-select u.id,
-       coalesce(u.raw_user_meta_data->>'name', split_part(u.email,'@',1)),
-       u.email, 'member', false
-from auth.users u
-left join public.profiles p on p.id = u.id
-where p.id is null;
-
--- 3. Let the app READ all profiles so the admin approval list loads.
---    Includes "anon" because the built-in admin logs in locally (no Supabase
---    session), so its requests reach Supabase as the anonymous role.
-drop policy if exists "read all profiles" on public.profiles;
-create policy "read all profiles" on public.profiles for select to anon, authenticated using (true);
-
--- 4. Let the app UPDATE profiles (approve / role / company) for the same reason.
-drop policy if exists "admins update profiles" on public.profiles;
-drop policy if exists "users update own profile" on public.profiles;
-drop policy if exists "app update profiles" on public.profiles;
-create policy "app update profiles" on public.profiles for update to anon, authenticated
-  using ( true ) with check ( true );
-
--- 5. Let the app INSERT profiles (needed if a sign-up's trigger didn't fire).
-drop policy if exists "app insert profiles" on public.profiles;
-create policy "app insert profiles" on public.profiles for insert to anon, authenticated
-  with check ( true );
-
--- 6. CLOUD BACKUP: stores your whole workspace (projects, venues, members, logo)
---    so your data is saved forever and survives a cleared browser or new device.
-create table if not exists public.workspace_state (
-  id text primary key,
-  data jsonb,
-  updated_at timestamptz default now()
-);
-alter table public.workspace_state enable row level security;
-drop policy if exists "workspace read"   on public.workspace_state;
-drop policy if exists "workspace write"  on public.workspace_state;
-drop policy if exists "workspace update" on public.workspace_state;
-create policy "workspace read"   on public.workspace_state for select to anon, authenticated using ( true );
-create policy "workspace write"  on public.workspace_state for insert to anon, authenticated with check ( true );
-create policy "workspace update" on public.workspace_state for update to anon, authenticated using ( true ) with check ( true );
-
--- 7. INVITE LINKS: validated server-side so an invite works on the invitee's
---    own browser (auto-approves them as a member when they sign up).
-create table if not exists public.invite_links (
-  token text primary key,
-  expires_at timestamptz,
-  created_at timestamptz default now()
-);
-alter table public.invite_links enable row level security;
-drop policy if exists "invite read"  on public.invite_links;
-drop policy if exists "invite write" on public.invite_links;
-create policy "invite read"  on public.invite_links for select to anon, authenticated using ( true );
-create policy "invite write" on public.invite_links for insert to anon, authenticated with check ( true );
-
--- 8. REAL-TIME: broadcast workspace changes to every open browser instantly.
-do $$ begin
-  alter publication supabase_realtime add table public.workspace_state;
-exception when duplicate_object then null; end $$;`;
-
-  const copySql = () => {
-    navigator.clipboard.writeText(rlsSql).then(() => {
-      setSqlCopied(true);
-      setTimeout(() => setSqlCopied(false), 2500);
-    });
-  };
-
   const refreshProfiles = useCallback(async () => {
-    if (!isSupabaseConfigured) { setDiag({ error: 'Supabase env vars missing in this deployment.', rawCount: 0, emails: [] }); return; }
+    if (!isSupabaseConfigured) return;
     setLoadingProfiles(true);
     const res = await fetchAllProfilesDebug();
-    setDiag({ error: res.error, rawCount: res.rawCount, emails: res.accounts.map(a => a.email) });
-    if (res.accounts.length > 0) {
-      mergeSupabaseAccounts(res.accounts);
-      // If we only got 1 profile (just ourselves), RLS likely not set up yet
-      setRlsWarning(res.rawCount === 1 && res.accounts[0]?.id === me?.id);
-    } else {
-      setRlsWarning(true);
-    }
+    if (res.accounts.length > 0) mergeSupabaseAccounts(res.accounts);
     setLoadingProfiles(false);
-  }, [mergeSupabaseAccounts, me?.id]);
+  }, [mergeSupabaseAccounts]);
   useEffect(() => { void refreshProfiles(); }, [refreshProfiles]);
 
   // Approve/revoke handlers that also persist to Supabase when configured.
@@ -749,63 +647,6 @@ exception when duplicate_object then null; end $$;`;
     <div>
       <PageHeader title="Access control" subtitle="Manage who can enter this workspace. Approve sign-up requests or create accounts directly." />
 
-      {/* ── Supabase RLS setup (always shown so the admin can always copy the SQL) ── */}
-      <div style={{
-        marginBottom: 28, borderRadius: 10,
-        border: `1px solid ${rlsWarning || !isSupabaseConfigured ? '#f59e0b' : 'var(--color-border-subtle)'}`,
-        background: rlsWarning || !isSupabaseConfigured ? 'rgba(245,158,11,0.06)' : 'var(--color-bg-elevated)',
-        overflow: 'hidden',
-      }}>
-        <button
-          onClick={() => setShowSql(s => !s)}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer',
-            color: rlsWarning || !isSupabaseConfigured ? '#f59e0b' : 'var(--color-text-secondary)',
-          }}
-        >
-          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-            {!isSupabaseConfigured
-              ? '⚠ Supabase NOT connected — add env vars in Vercel (see below)'
-              : rlsWarning
-                ? '⚠ Supabase setup required — run this SQL so sign-ups appear'
-                : '✓ Supabase RLS setup — click to view the SQL'}
-          </span>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{showSql ? '▲ hide' : '▼ show'}</span>
-        </button>
-        {showSql && (
-          <div style={{ padding: '0 16px 16px' }}>
-            {!isSupabaseConfigured && (
-              <div style={{ fontSize: 'var(--text-xs)', color: '#f59e0b', marginBottom: 10, lineHeight: 1.6, padding: '10px 12px', background: 'rgba(245,158,11,0.1)', borderRadius: 7 }}>
-                <b>This deployment can&apos;t reach Supabase.</b> The two env vars are missing in Vercel,
-                so real accounts (sign-ups, approvals) won&apos;t load. In <b>Vercel → Settings → Environment Variables</b> add:
-                <div style={{ fontFamily: 'monospace', marginTop: 6, color: 'var(--color-text-primary)' }}>
-                  NEXT_PUBLIC_SUPABASE_URL<br />NEXT_PUBLIC_SUPABASE_ANON_KEY
-                </div>
-                then redeploy. After that, run the SQL below in Supabase.
-              </div>
-            )}
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-              Open <strong>Supabase → SQL Editor</strong>, paste and run this once. Then click Refresh above.
-            </p>
-            <pre style={{
-              fontSize: 11, lineHeight: 1.6, padding: '12px 14px', borderRadius: 8,
-              background: 'var(--color-bg-base)', border: '0.5px solid var(--color-border-default)',
-              overflowX: 'auto', color: 'var(--color-text-secondary)', margin: 0, whiteSpace: 'pre-wrap',
-            }}>{rlsSql}</pre>
-            <button
-              onClick={copySql}
-              style={{
-                marginTop: 10, padding: '6px 14px', borderRadius: 7, border: '0.5px solid var(--color-border-default)',
-                background: sqlCopied ? 'var(--color-green)' : 'var(--color-bg-active)',
-                color: sqlCopied ? '#fff' : 'var(--color-text-primary)',
-                fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer',
-              }}
-            >{sqlCopied ? '✓ Copied!' : 'Copy SQL'}</button>
-          </div>
-        )}
-      </div>
-
       {/* ── Pending requests ── */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -821,34 +662,6 @@ exception when duplicate_object then null; end $$;`;
             </button>
           )}
         </div>
-
-        {/* Live diagnostic: shows exactly what Supabase returned */}
-        {diag && (
-          <div style={{
-            fontSize: 'var(--text-xs)', marginBottom: 8, lineHeight: 1.6,
-            padding: '10px 12px', borderRadius: 7,
-            background: diag.error ? 'rgba(255,79,106,0.1)' : 'rgba(96,165,250,0.08)',
-            border: `0.5px solid ${diag.error ? 'rgba(255,79,106,0.3)' : 'rgba(96,165,250,0.25)'}`,
-            color: 'var(--color-text-secondary)',
-          }}>
-            {diag.error ? (
-              <>
-                <b style={{ color: 'var(--color-red)' }}>Supabase error:</b> {diag.error}
-                <div style={{ marginTop: 4 }}>→ This usually means the RLS policy isn&apos;t applied yet. Run the SQL above.</div>
-              </>
-            ) : (
-              <>
-                <b style={{ color: 'var(--color-accent-bright)' }}>Supabase returned {diag.rawCount} profile{diag.rawCount !== 1 ? 's' : ''}:</b>{' '}
-                {diag.emails.length > 0 ? diag.emails.join(', ') : '(none)'}
-                {diag.rawCount <= 1 && (
-                  <div style={{ marginTop: 4, color: 'var(--color-amber)' }}>
-                    → Only your own profile is visible. If Karlo signed up but isn&apos;t here, his profile row was never created — run the full SQL above (the trigger + backfill in steps 1–2 will create it).
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
 
         <SettingsCard>
           {pending.length === 0 ? (

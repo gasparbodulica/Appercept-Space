@@ -685,50 +685,62 @@ create policy "users update own profile"
     <div>
       <PageHeader title="Access control" subtitle="Manage who can enter this workspace. Approve sign-up requests or create accounts directly." />
 
-      {/* ── Supabase RLS setup (required to see new sign-ups) ── */}
-      {isSupabaseConfigured && (
-        <div style={{
-          marginBottom: 28, borderRadius: 10,
-          border: `1px solid ${rlsWarning ? '#f59e0b' : 'var(--color-border-subtle)'}`,
-          background: rlsWarning ? 'rgba(245,158,11,0.06)' : 'var(--color-bg-elevated)',
-          overflow: 'hidden',
-        }}>
-          <button
-            onClick={() => setShowSql(s => !s)}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer',
-              color: rlsWarning ? '#f59e0b' : 'var(--color-text-secondary)',
-            }}
-          >
-            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-              {rlsWarning ? '⚠ Supabase setup required — new sign-ups invisible until you run this SQL' : '✓ Supabase RLS setup (click to view SQL)'}
-            </span>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{showSql ? '▲ hide' : '▼ show'}</span>
-          </button>
-          {showSql && (
-            <div style={{ padding: '0 16px 16px' }}>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-                Open <strong>Supabase → SQL Editor</strong>, paste and run this once. Then click Refresh above.
-              </p>
-              <pre style={{
-                fontSize: 11, lineHeight: 1.6, padding: '12px 14px', borderRadius: 8,
-                background: 'var(--color-bg-base)', border: '0.5px solid var(--color-border-default)',
-                overflowX: 'auto', color: 'var(--color-text-secondary)', margin: 0, whiteSpace: 'pre-wrap',
-              }}>{rlsSql}</pre>
-              <button
-                onClick={copySql}
-                style={{
-                  marginTop: 10, padding: '6px 14px', borderRadius: 7, border: '0.5px solid var(--color-border-default)',
-                  background: sqlCopied ? 'var(--color-green)' : 'var(--color-bg-active)',
-                  color: sqlCopied ? '#fff' : 'var(--color-text-primary)',
-                  fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer',
-                }}
-              >{sqlCopied ? '✓ Copied!' : 'Copy SQL'}</button>
-            </div>
-          )}
-        </div>
-      )}
+      {/* ── Supabase RLS setup (always shown so the admin can always copy the SQL) ── */}
+      <div style={{
+        marginBottom: 28, borderRadius: 10,
+        border: `1px solid ${rlsWarning || !isSupabaseConfigured ? '#f59e0b' : 'var(--color-border-subtle)'}`,
+        background: rlsWarning || !isSupabaseConfigured ? 'rgba(245,158,11,0.06)' : 'var(--color-bg-elevated)',
+        overflow: 'hidden',
+      }}>
+        <button
+          onClick={() => setShowSql(s => !s)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer',
+            color: rlsWarning || !isSupabaseConfigured ? '#f59e0b' : 'var(--color-text-secondary)',
+          }}
+        >
+          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+            {!isSupabaseConfigured
+              ? '⚠ Supabase NOT connected — add env vars in Vercel (see below)'
+              : rlsWarning
+                ? '⚠ Supabase setup required — run this SQL so sign-ups appear'
+                : '✓ Supabase RLS setup — click to view the SQL'}
+          </span>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{showSql ? '▲ hide' : '▼ show'}</span>
+        </button>
+        {showSql && (
+          <div style={{ padding: '0 16px 16px' }}>
+            {!isSupabaseConfigured && (
+              <div style={{ fontSize: 'var(--text-xs)', color: '#f59e0b', marginBottom: 10, lineHeight: 1.6, padding: '10px 12px', background: 'rgba(245,158,11,0.1)', borderRadius: 7 }}>
+                <b>This deployment can&apos;t reach Supabase.</b> The two env vars are missing in Vercel,
+                so real accounts (sign-ups, approvals) won&apos;t load. In <b>Vercel → Settings → Environment Variables</b> add:
+                <div style={{ fontFamily: 'monospace', marginTop: 6, color: 'var(--color-text-primary)' }}>
+                  NEXT_PUBLIC_SUPABASE_URL<br />NEXT_PUBLIC_SUPABASE_ANON_KEY
+                </div>
+                then redeploy. After that, run the SQL below in Supabase.
+              </div>
+            )}
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+              Open <strong>Supabase → SQL Editor</strong>, paste and run this once. Then click Refresh above.
+            </p>
+            <pre style={{
+              fontSize: 11, lineHeight: 1.6, padding: '12px 14px', borderRadius: 8,
+              background: 'var(--color-bg-base)', border: '0.5px solid var(--color-border-default)',
+              overflowX: 'auto', color: 'var(--color-text-secondary)', margin: 0, whiteSpace: 'pre-wrap',
+            }}>{rlsSql}</pre>
+            <button
+              onClick={copySql}
+              style={{
+                marginTop: 10, padding: '6px 14px', borderRadius: 7, border: '0.5px solid var(--color-border-default)',
+                background: sqlCopied ? 'var(--color-green)' : 'var(--color-bg-active)',
+                color: sqlCopied ? '#fff' : 'var(--color-text-primary)',
+                fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer',
+              }}
+            >{sqlCopied ? '✓ Copied!' : 'Copy SQL'}</button>
+          </div>
+        )}
+      </div>
 
       {/* ── Pending requests ── */}
       <div style={{ marginBottom: 28 }}>

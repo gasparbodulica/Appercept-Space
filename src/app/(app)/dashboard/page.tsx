@@ -257,7 +257,7 @@ export default function DashboardPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <Topbar breadcrumb={['Dashboard']} />
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', background: 'var(--color-bg-base)' }}>
+      <div className="dash-pad" style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', background: 'var(--color-bg-base)' }}>
         {/* Greeting */}
         <div style={{ marginBottom: 32, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
@@ -272,7 +272,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 40 }}>
+        <div className="grid-4-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 40 }}>
           {[
             { label: 'Active clients', value: activeClients, color: 'var(--color-green)', sub: clubStages.Active > 0 ? `${activeClientRows} clients · ${clubStages.Active} clubs` : undefined },
             { label: 'Open projects', value: openProjects, color: 'var(--color-accent)', sub: undefined },
@@ -356,7 +356,7 @@ export default function DashboardPage() {
           <TeamCapacityHeatmap />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        <div className="grid-2-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           {/* Today's meetings */}
           <Section title="Today's meetings">
             {todayMeetings.length === 0 ? (
@@ -586,7 +586,7 @@ function FinancialOverview({ cashOnHand, netWorth, totalAssets, totalLiabilities
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+      <div className="grid-5-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
         {cards.map((c) => (
           <div key={c.label} onClick={c.onClick}
             style={{ background: 'var(--color-bg-surface)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 100ms' }}
@@ -605,7 +605,7 @@ function FinancialOverview({ cashOnHand, netWorth, totalAssets, totalLiabilities
 
       {/* Where money comes from & goes — straight from your revenue + Costs database */}
       {(revenueStreams.length > 0 || costsByCategory.length > 0) && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 20, paddingTop: 18, borderTop: '0.5px solid var(--color-border-subtle)' }}>
+        <div className="grid-2-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 20, paddingTop: 18, borderTop: '0.5px solid var(--color-border-subtle)' }}>
           {/* Revenue streams */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -690,7 +690,7 @@ function ClubCrowdSnapshot({ yearly, monthly, stages, connected, total, onOpen }
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24, alignItems: 'center' }}>
+      <div className="grid-2-1" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24, alignItems: 'center' }}>
         {/* Left: headline figures */}
         <div style={{ display: 'flex', gap: 28 }}>
           <div>
@@ -767,7 +767,7 @@ function ApperceptFinanceBox({ f, upfront, recurring, clientCount, consultingCou
         >Open Costs →</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 28, alignItems: 'stretch' }}>
+      <div className="grid-2-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 28, alignItems: 'stretch' }}>
         {/* Left: figures */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center' }}>
           <FinanceRow label="One-time payments" value={fmt(upfront)} color="var(--color-accent-bright)" sub={`${f.monthLabel} project upfronts (counted once)`} />

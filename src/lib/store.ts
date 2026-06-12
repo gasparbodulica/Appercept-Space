@@ -138,6 +138,7 @@ interface AppState {
   requestResetCode: (email: string) => { ok: boolean; error?: string; code?: string; name?: string };
   confirmReset: (email: string, code: string, newPassword: string) => { ok: boolean; error?: string };
   approveAccount: (id: string) => void;
+  setAccountRole: (id: string, role: 'admin' | 'member' | 'viewer') => void;
   approveAsClient: (id: string, company: string) => void;
   revokeAccount: (id: string) => void;
   mergeSupabaseAccounts: (incoming: Account[]) => void;
@@ -695,6 +696,7 @@ export const useAppStore = create<AppState>()(
       },
 
       approveAccount: (id) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: true, role: a.role === 'viewer' || a.role === 'client' ? 'member' : a.role, client_company: undefined } : a)) })),
+      setAccountRole: (id, role) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, role } : a)) })),
       approveAsClient: (id, company) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: true, role: 'client', client_company: company } : a)) })),
       revokeAccount: (id) => set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, approved: false } : a)) })),
       // Merge real Supabase profiles into the accounts list (admin approval UI),

@@ -579,7 +579,7 @@ function RolesTab() {
 // ─── Access Tab (admin) ───────────────────────────────────────────────────────
 
 function AccessTab() {
-  const { accounts, databases, pages, approveAccount, approveAsClient, revokeAccount, deleteAccount, createAccount, mergeSupabaseAccounts } = useAppStore();
+  const { accounts, databases, pages, approveAccount, approveAsClient, revokeAccount, deleteAccount, createAccount, mergeSupabaseAccounts, setAccountRole } = useAppStore();
   const me = useCurrentAccount();
   const pending = accounts.filter((a) => !a.approved);
 
@@ -708,6 +708,10 @@ exception when duplicate_object then null; end $$;`;
   const doRevoke = (id: string) => {
     revokeAccount(id);
     if (isSupabaseConfigured) void updateProfileApproval(id, { approved: false });
+  };
+  const doSetRole = (id: string, role: 'admin' | 'member' | 'viewer') => {
+    setAccountRole(id, role);
+    if (isSupabaseConfigured) void updateProfileApproval(id, { role });
   };
   const teamAccounts = accounts.filter((a) => a.approved && a.role !== 'client');
   const clientAccounts = accounts.filter((a) => a.approved && a.role === 'client');
@@ -976,8 +980,25 @@ exception when duplicate_object then null; end $$;`;
                   </div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{a.email}</div>
                 </div>
-                <RoleBadge role={a.role} />
-                {a.role !== 'admin' && (
+                {a.id === me?.id ? (
+                  <RoleBadge role={a.role} />
+                ) : (
+                  <select
+                    value={a.role}
+                    onChange={(e) => doSetRole(a.id, e.target.value as 'admin' | 'member' | 'viewer')}
+                    style={{
+                      fontSize: 'var(--text-xs)', padding: '4px 8px', borderRadius: 6,
+                      border: '0.5px solid var(--color-border-default)',
+                      background: 'var(--color-bg-elevated)', color: 'var(--color-text-secondary)',
+                      cursor: 'pointer', outline: 'none',
+                    }}
+                  >
+                    <option value="admin">Admin</option>
+                    <option value="member">Member</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                )}
+                {a.id !== me?.id && (
                   <>
                     <button onClick={() => doRevoke(a.id)} title="Revoke access" style={ghostSmallBtn}>Revoke</button>
                     <button onClick={() => deleteAccount(a.id)} title="Delete" style={iconDangerBtn}><IconTrash size={14} /></button>

@@ -1304,13 +1304,16 @@ export const useAppStore = create<AppState>()(
             return cleaned;
           })(),
           teamRoles: (p.teamRoles ?? current.teamRoles).filter((r) => !REMOVED_DEMO_ROLE_IDS.includes(r.id)),
-          // Seed pages keep their slot/order but adopt any persisted edits
-          // (rename/icon/colour); user-created pages are appended after.
-          // 'p-team' is explicitly dropped — the Team & Roles DB was removed.
-          pages: [
-            ...PAGES.map((sp) => { const pp = persistedPages.find((pp) => pp.id === sp.id) ?? sp; return { ...pp, badge: sp.badge }; }),
-            ...persistedPages.filter((pp) => pp.id !== 'p-team' && !PAGES.some((sp) => sp.id === pp.id)),
-          ],
+          // Merge seed pages (adopting persisted edits: rename/icon/colour/position)
+          // with user-created pages, then order by the user's saved drag position so
+          // a reordered sidebar sticks. 'p-team' is dropped (Team DB removed).
+          pages: (() => {
+            const merged = [
+              ...PAGES.map((sp) => { const pp = persistedPages.find((pp) => pp.id === sp.id); return pp ? { ...pp, badge: sp.badge } : sp; }),
+              ...persistedPages.filter((pp) => pp.id !== 'p-team' && !PAGES.some((sp) => sp.id === pp.id)),
+            ];
+            return merged.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+          })(),
           // Seed admin + persisted accounts, with the old demo accounts stripped
           // and deduped by email (a real Supabase UUID account wins over the seed
           // placeholder for the same email).

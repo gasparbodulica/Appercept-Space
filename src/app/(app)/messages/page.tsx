@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
 import { useIsMobile } from '@/lib/useIsMobile';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Topbar } from '@/components/layout/Topbar';
 import { Channel, User, ChatMessage } from '@/lib/types';
 import { PageIcon, PAGE_COLORS } from '@/lib/icons';
@@ -106,6 +107,38 @@ export default function MessagesPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
+  // ── Typing presence (ephemeral, via Supabase broadcast — no DB writes) ──
+  const [typing, setTyping] = useState<{ channelId: string; userId: string; name: string; at: number }[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const typingChanRef = useRef<any>(null);
+  const lastTypingSent = useRef(0);
+
+  useEffect(() => {
+    const sb = supabase;
+    if (!isSupabaseConfigured || !sb) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const chan: any = sb.channel('typing-presence', { config: { broadcast: { self: false } } });
+    chan.on('broadcast', { event: 'typing' }, (payload: { payload?: { channelId: string; userId: string; name: string } }) => {
+      const p = payload.payload;
+      if (!p || p.userId === currentUserId) return;
+      setTyping((prev) => [...prev.filter((t) => !(t.channelId === p.channelId && t.userId === p.userId)), { ...p, at: Date.now() }]);
+    }).subscribe();
+    typingChanRef.current = chan;
+    // Expire stale "typing" entries (older than 4s) a few times a second
+    const iv = setInterval(() => setTyping((prev) => prev.filter((t) => Date.now() - t.at < 4000)), 1000);
+    return () => { clearInterval(iv); try { sb.removeChannel(chan); } catch { /* ignore */ } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const notifyTyping = () => {
+    if (!typingChanRef.current || !active) return;
+    const now = Date.now();
+    if (now - lastTypingSent.current < 1500) return; // throttle
+    lastTypingSent.current = now;
+    const me = users.find((u) => u.id === currentUserId);
+    typingChanRef.current.send({ type: 'broadcast', event: 'typing', payload: { channelId: active.id, userId: currentUserId, name: me?.name?.split(/\s+/)[0] ?? 'Someone' } });
+  };
+
   const active = myChannels.find((c) => c.id === activeId) ?? myChannels[0];
   const messages = useMemo(
     () => chatMessages.filter((m) => m.channel_id === active?.id).sort((a, b) => a.created_at.localeCompare(b.created_at)),
@@ -172,6 +205,7 @@ export default function MessagesPage() {
   const onDraftChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setDraft(val);
+    if (val.trim()) notifyTyping();
     const cursor = e.target.selectionStart ?? val.length;
     const before = val.slice(0, cursor);
     const m = before.match(/(?:^|\s)@([^\s@]*)$/);
@@ -360,18 +394,24 @@ export default function MessagesPage() {
                 const prev = messages[i - 1];
                 const grouped = prev && prev.sender_id === m.sender_id && (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60 * 1000);
                 return (
-                  <div key={m.id} style={{ display: 'flex', gap: 10, padding: grouped ? '1px 0 1px 42px' : '8px 0 1px', alignItems: 'flex-start' }}>
+                  <div key={m.id} style={{
+                    display: 'flex', gap: 10, alignItems: 'flex-start',
+                    flexDirection: mine ? 'row-reverse' : 'row',
+                    padding: grouped ? '1px 0' : '8px 0 1px',
+                    paddingLeft: grouped && !mine ? 42 : 0,
+                    paddingRight: grouped && mine ? 42 : 0,
+                  }}>
                     {!grouped && <Avatar user={u} size={32} />}
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start' }}>
                       {!grouped && (
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2, flexDirection: mine ? 'row-reverse' : 'row' }}>
                           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: mine ? 'var(--color-accent-bright)' : 'var(--color-text-primary)' }}>{u?.name ?? 'Unknown'}{mine && ' (you)'}</span>
                           <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{new Date(m.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
                         </div>
                       )}
                       {m.body && (
                         <div style={{
-                          display: 'inline-block', maxWidth: '88%',
+                          display: 'inline-block', maxWidth: '88%', textAlign: 'left',
                           fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', lineHeight: 1.5,
                           whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                           padding: '8px 12px', borderRadius: mine ? '12px 12px 4px 12px' : '4px 12px 12px 12px',
@@ -390,6 +430,23 @@ export default function MessagesPage() {
                   </div>
                 );
               })}
+              {/* Typing indicator */}
+              {(() => {
+                const here = typing.filter((t) => t.channelId === active?.id);
+                if (here.length === 0) return null;
+                const names = Array.from(new Set(here.map((t) => t.name)));
+                const label = names.length === 1 ? `${names[0]} is typing` : `${names.slice(0, 2).join(', ')} are typing`;
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0 2px 42px' }}>
+                    <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}>
+                      <span className="typing-dot" style={{ animationDelay: '0ms' }} />
+                      <span className="typing-dot" style={{ animationDelay: '150ms' }} />
+                      <span className="typing-dot" style={{ animationDelay: '300ms' }} />
+                    </span>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{label}…</span>
+                  </div>
+                );
+              })()}
               <div ref={bottomRef} />
             </div>
 

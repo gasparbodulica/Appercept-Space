@@ -326,8 +326,8 @@ export function computeProjectRevenue(
 
   const upfrontCol = projectsDb.columns.find(c => c.id === 'pc-upfront' || c.name === 'Upfront (€)' || c.name === 'Upfront');
   const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly' || c.name === 'Monthly (€)' || c.name === 'Monthly');
-  const startCol   = projectsDb.columns.find(c => c.id === 'pc-start' || c.name === 'Start date' || c.name === 'Start');
-  const endCol     = projectsDb.columns.find(c => c.id === 'pc-end'   || c.name === 'End date'   || c.name === 'End');
+  const startCol   = projectsDb.columns.find(c => c.id === 'pc-start' || c.name === 'Start of payment' || c.name === 'Start date' || c.name === 'Start');
+  const endCol     = projectsDb.columns.find(c => c.id === 'pc-end'   || c.name === 'End of payment'   || c.name === 'End date'   || c.name === 'End');
   const clientCol  = projectsDb.columns.find(c => c.name === 'Client' || c.id === 'pc-client');
   const curYM = nowYM();
 
@@ -354,28 +354,33 @@ export function computeProjectRevenue(
       ?? '';
   };
 
-  // Only apply ISO date filter — non-ISO values treated as "no date".
-  const safeYM = (s: string) => /^\d{4}-\d{2}/.test(s) ? ym(s) : '';
+  // ISO helpers. safeDate returns YYYY-MM-DD if it's a real ISO date, else ''.
+  const safeDate = (s: string) => /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : '';
+  const safeYM   = (s: string) => /^\d{4}-\d{2}/.test(s) ? ym(s) : '';
+  // Local "today" as YYYY-MM-DD (ISO strings sort chronologically).
+  const now = new Date();
+  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   let upfrontThisMonth = 0, monthlyRecurring = 0, forecastUpfront = 0, forecastMonthly = 0;
 
   for (const row of projectsDb.rows) {
-    // The Start date is the trigger: a project earns NOTHING until it has a Start
-    // date (= when the client starts paying us). Status is purely for project
-    // management and never affects the money.
-    const startYM = safeYM(startCol ? String(row.cells[startCol.id] ?? '') : '');
-    if (!startYM) continue; // not paying yet → €0
+    // The Start of payment date is the trigger: a project earns NOTHING until that
+    // date arrives (= when the client actually starts paying). Status is purely for
+    // project management and never affects the money.
+    const startISO = safeDate(startCol ? String(row.cells[startCol.id] ?? '') : '');
+    if (!startISO) continue;                 // no payment date set → €0
+    if (startISO > todayISO) continue;       // payment starts in the future → €0 until then
 
-    const endYM   = safeYM(endCol ? String(row.cells[endCol.id] ?? '') : '');
+    const endISO  = safeDate(endCol ? String(row.cells[endCol.id] ?? '') : '');
+    const startYM = safeYM(startISO);
     const cst     = clientStatusOf(row); // 'Lead' | 'Active' | 'Past' | 'Onboarding' | ''
 
     const upfront = upfrontCol ? (Number(row.cells[upfrontCol.id]) || 0) : 0;
     const monthly = monthlyCol ? (Number(row.cells[monthlyCol.id]) || 0) : 0;
 
-    const upfrontCountsNow  = upfront > 0 && startYM === curYM; // one-time, in its start month
-    const started           = startYM <= curYM;
-    const notEnded          = !endYM || endYM >= curYM;
-    const monthlyCountsNow  = monthly > 0 && started && notEnded;
+    const upfrontCountsNow  = upfront > 0 && startYM === curYM;      // one-time, in its start month
+    const notEnded          = !endISO || endISO >= todayISO;        // payment hasn't ended yet
+    const monthlyCountsNow  = monthly > 0 && notEnded;              // started already (checked above)
 
     if (cst === 'Lead') {
       // Lead → forecast, not current profit

@@ -339,12 +339,42 @@ export const useAppStore = create<AppState>()(
         set((s) => {
           const db = s.databases[databaseId];
           if (!db) return s;
+          const nowISO = new Date().toISOString();
           const rows = db.rows.map((r) =>
             r.id === rowId
-              ? { ...r, cells: { ...r.cells, [columnId]: value }, updated_at: new Date().toISOString() }
+              ? { ...r, cells: { ...r.cells, [columnId]: value }, updated_at: nowISO }
               : r
           );
-          return { databases: { ...s.databases, [databaseId]: { ...db, rows } } };
+          const nextDatabases = { ...s.databases, [databaseId]: { ...db, rows } };
+
+          // When a CLIENT is set to "Past", auto-end payment on their connected
+          // projects (set "End of payment" to today) so the calculation stops and
+          // there's a record of when it ended.
+          if (databaseId === 'db-clients' && String(value) === 'Past') {
+            const statusCol = db.columns.find((c) => c.name === 'Status');
+            const companyCol = db.columns.find((c) => c.name === 'Company');
+            if (statusCol && statusCol.id === columnId && companyCol) {
+              const clientRow = rows.find((r) => r.id === rowId);
+              const company = String(clientRow?.cells[companyCol.id] ?? '').toLowerCase().trim();
+              const projDb = nextDatabases['db-projects'];
+              const endCol = projDb?.columns.find((c) => c.id === 'pc-end');
+              const projClientCol = projDb?.columns.find((c) => c.name === 'Client' || c.id === 'pc-client');
+              if (company && projDb && endCol && projClientCol) {
+                const today = nowISO.slice(0, 10);
+                const matches = (a: string, b: string) => { a = a.toLowerCase().trim(); b = b.toLowerCase().trim(); return !!a && !!b && (a === b || a.includes(b) || b.includes(a)); };
+                const projRows = projDb.rows.map((pr) => {
+                  const pc = String(pr.cells[projClientCol.id] ?? '');
+                  const hasEnd = String(pr.cells[endCol.id] ?? '').trim() !== '';
+                  return matches(pc, company) && !hasEnd
+                    ? { ...pr, cells: { ...pr.cells, [endCol.id]: today }, updated_at: nowISO }
+                    : pr;
+                });
+                nextDatabases['db-projects'] = { ...projDb, rows: projRows };
+              }
+            }
+          }
+
+          return { databases: nextDatabases };
         });
       },
 
@@ -1200,6 +1230,17 @@ export const useAppStore = create<AppState>()(
                 ...(!hasUpfront ? [{ id: 'pc-upfront', database_id: 'db-projects', name: 'Upfront (€)', type: 'number' as const, position: 6, config: { prefix: '€' }, hidden: false, width: 120 }] : []),
                 ...(!hasMonthly ? [{ id: 'pc-monthly', database_id: 'db-projects', name: 'Monthly (€)', type: 'number' as const, position: 7, config: { prefix: '€' }, hidden: false, width: 120 }] : []),
               ],
+            };
+          }
+          // Rename the date columns to "Start of payment" / "End of payment".
+          const pdb = mergedDatabases['db-projects'];
+          if (pdb.columns.some(c => (c.id === 'pc-start' && c.name !== 'Start of payment') || (c.id === 'pc-end' && c.name !== 'End of payment'))) {
+            mergedDatabases['db-projects'] = {
+              ...pdb,
+              columns: pdb.columns.map(c =>
+                c.id === 'pc-start' ? { ...c, name: 'Start of payment' } :
+                c.id === 'pc-end'   ? { ...c, name: 'End of payment' } : c,
+              ),
             };
           }
         }

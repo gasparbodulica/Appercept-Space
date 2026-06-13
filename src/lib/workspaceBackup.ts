@@ -83,6 +83,29 @@ export function applyCloudBlobLive(rawData: unknown, updatedAt: string): void {
   }
 }
 
+/**
+ * Polling fallback: fetch the cloud copy and apply it if it's newer than ours.
+ * Runs on a timer so changes still sync even when Supabase Realtime isn't enabled
+ * (just not instantly — within the poll interval).
+ */
+export async function pollWorkspace(): Promise<void> {
+  try {
+    if (!isSupabaseConfigured || !supabase || typeof localStorage === 'undefined') return;
+    const { data, error } = await supabase
+      .from('workspace_state')
+      .select('data, updated_at')
+      .eq('id', BACKUP_ID)
+      .single();
+    if (error || !data?.data) return;
+    const updatedAt = String(data.updated_at ?? '');
+    const localSavedAt = localStorage.getItem(SAVED_AT_KEY) ?? '';
+    if (updatedAt && updatedAt <= localSavedAt) return; // nothing new
+    applyCloudBlobLive(data.data, updatedAt);
+  } catch {
+    /* best-effort */
+  }
+}
+
 /** Subscribe to live workspace changes from other users/devices. */
 export function subscribeToWorkspace(): () => void {
   const sb = supabase;

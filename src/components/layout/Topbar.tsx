@@ -52,7 +52,7 @@ export function Topbar({ breadcrumb = [], pageTitle, extra }: TopbarProps) {
       </button>
 
       {/* Breadcrumb */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+      <div className="topbar-breadcrumb" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
         {crumbs.map((crumb, i) => (
           <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {i > 0 && <span style={{ color: 'var(--color-text-muted)' }}>/</span>}

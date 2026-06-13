@@ -387,3 +387,29 @@ header {
   .db-toolbar-spacer { display: none !important; }
   .db-toolbar-actions { margin-bottom: 4px !important; }
 }
+
+/* Broad mobile overlap fixes */
+@media (max-width: 768px) {
+  /* Row detail opens full-screen instead of a side panel that overlaps */
+  .row-detail-panel {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    min-width: 0 !important;
+    height: 100dvh !important;
+    z-index: 80 !important;
+    border-left: none !important;
+  }
+  /* Any fixed/absolute modal card stays within the screen */
+  .modal-card, [data-modal] {
+    max-width: 92vw !important;
+    width: 92vw !important;
+  }
+  /* Topbar breadcrumb can't push the action buttons off-screen */
+  .topbar-breadcrumb {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+}

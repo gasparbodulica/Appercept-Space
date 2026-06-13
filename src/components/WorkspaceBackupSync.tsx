@@ -5,7 +5,7 @@ import { useAppStore } from '@/lib/store';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import {
   saveWorkspaceBackup, maybeRestoreWorkspaceBackup,
-  subscribeToWorkspace, isApplyingRemote, markRestoreComplete,
+  subscribeToWorkspace, isApplyingRemote, markRestoreComplete, pollWorkspace,
 } from '@/lib/workspaceBackup';
 
 /**
@@ -45,11 +45,20 @@ export function WorkspaceBackupSync() {
     };
   }, []);
 
-  // 3) Live updates from other users/devices
+  // 3) Live updates from other users/devices (instant)
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     const unsub = subscribeToWorkspace();
     return unsub;
+  }, []);
+
+  // 4) Polling fallback every 8s — keeps everyone in sync even if Supabase
+  //    Realtime isn't enabled. Pauses when the tab is hidden.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const tick = () => { if (document.visibilityState === 'visible') void pollWorkspace(); };
+    const iv = setInterval(tick, 8000);
+    return () => clearInterval(iv);
   }, []);
 
   return null;

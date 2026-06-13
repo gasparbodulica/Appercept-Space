@@ -47,7 +47,7 @@ export function RowDetailPanel() {
       <div style={{ position: 'fixed', inset: 0, zIndex: 49, background: 'rgba(0,0,0,0.4)', display: 'none' }} onClick={closeRow} />
 
       {/* Panel */}
-      <div style={{
+      <div className="row-detail-panel" style={{
         width: 'var(--panel-width)', minWidth: 'var(--panel-width)',
         height: '100%', background: 'var(--color-bg-surface)',
         borderLeft: '0.5px solid var(--color-border-default)',

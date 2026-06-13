@@ -30,29 +30,34 @@ function parseSeasonMonths(label: string): number {
   return m ? Math.min(12, Math.max(1, Number(m[1]))) : 12;
 }
 
+const MONTH_NAMES = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+
+/** Parse a "Season starts" month label → 1-12, or 0 if unset/unknown. */
+function parseStartMonth(label: string): number {
+  const l = (label || '').toLowerCase().trim();
+  if (!l) return 0;
+  const idx = MONTH_NAMES.findIndex(m => l.startsWith(m.slice(0, 3)));
+  return idx >= 0 ? idx + 1 : 0;
+}
+
 /**
- * Whether a venue is currently operating, given its season label and the current month (1-12).
- *   Year-round  → always
- *   9 months    → March–November
- *   6 months    → April–September
- *   Summer/3mo  → June–August
- *   Winter      → December–February
- * Any other label falls back to parsing the month count and guessing summer for short seasons.
+ * Whether a venue is operating in `month` (1-12), given how long its season runs
+ * (durationMonths) and which month it starts (startMonth, 1-12; 0 = not set).
+ *   • Year-round (duration ≥ 12)  → always
+ *   • Start month set             → the `duration` months from the start month,
+ *                                   wrapping across the year. e.g. start May + 3
+ *                                   months = May, June, July.
+ *   • Start month NOT set         → counts (no restriction yet) so revenue isn't
+ *                                   silently zeroed until the owner picks a start.
  */
-function isVenueInSeason(label: string, month: number): boolean {
-  const l = (label || '').toLowerCase();
-  if (!l || /year.?round|12/i.test(l)) return true;
-  if (/9\s*mo/i.test(l)) return month >= 3 && month <= 11;
-  if (/6\s*mo/i.test(l)) return month >= 4 && month <= 9;
-  if (/summer|3\s*mo/i.test(l)) return month >= 6 && month <= 8;
-  if (/winter/i.test(l)) return month === 12 || month <= 2;
-  if (/spring/i.test(l)) return month >= 3 && month <= 5;
-  if (/fall|autumn/i.test(l)) return month >= 9 && month <= 11;
-  // Parse number of months, assume summer-centred for short seasons
-  const mo = parseSeasonMonths(l);
-  if (mo >= 9) return month >= 3 && month <= 11;
-  if (mo >= 6) return month >= 4 && month <= 9;
-  return month >= 6 && month <= 8; // short → summer
+function isVenueInSeason(durationMonths: number, startMonth: number, month: number): boolean {
+  if (durationMonths >= 12) return true;
+  if (!startMonth) return true; // no start chosen yet → don't hide its revenue
+  for (let i = 0; i < durationMonths; i++) {
+    const m = ((startMonth - 1 + i) % 12) + 1;
+    if (m === month) return true;
+  }
+  return false;
 }
 
 /**
@@ -64,10 +69,11 @@ function isVenueInSeason(label: string, month: number): boolean {
  */
 export function computeClubCurrentMonth(clubcrowdDb: Database | undefined): { active: number; forecast: number; venueCount: number } {
   if (!clubcrowdDb) return { active: 0, forecast: 0, venueCount: 0 };
-  const feeC    = clubcrowdDb.columns.find(c => c.name === 'Fee / reservation (€)');
-  const resC    = clubcrowdDb.columns.find(c => c.name === 'Monthly reservations');
-  const statC   = clubcrowdDb.columns.find(c => c.name === 'Status');
-  const seasonC = clubcrowdDb.columns.find(c => c.name === 'Operating season');
+  const feeC     = clubcrowdDb.columns.find(c => c.name === 'Fee / reservation (€)');
+  const resC     = clubcrowdDb.columns.find(c => c.name === 'Monthly reservations');
+  const statC    = clubcrowdDb.columns.find(c => c.name === 'Status');
+  const seasonC  = clubcrowdDb.columns.find(c => c.name === 'Operating season');
+  const startC   = clubcrowdDb.columns.find(c => c.id === 'clc-season-start' || c.name === 'Season starts');
   if (!feeC || !resC) return { active: 0, forecast: 0, venueCount: 0 };
   const currentMonth = new Date().getMonth() + 1;
   let active = 0, venueCount = 0;
@@ -75,10 +81,12 @@ export function computeClubCurrentMonth(clubcrowdDb: Database | undefined): { ac
     const monthly = (Number(row.cells[feeC.id]) || 0) * (Number(row.cells[resC.id]) || 0);
     if (!monthly) continue;
     const st          = statC   ? String(row.cells[statC.id]   ?? '') : '';
-    const seasonLabel = seasonC ? String(row.cells[seasonC.id] ?? '') : '';
-    // ONLY "Active" venues earn — and only during their operating season.
+    const duration    = seasonC ? parseSeasonMonths(String(row.cells[seasonC.id] ?? '')) : 12;
+    const startMonth  = startC  ? parseStartMonth(String(row.cells[startC.id] ?? '')) : 0;
+    // ONLY "Active" venues earn — and only during their operating window
+    // (`duration` months counted from the chosen "Season starts" month).
     // Lead / Onboarding / Past are just labels and don't count anywhere.
-    if (st === 'Active' && isVenueInSeason(seasonLabel, currentMonth)) {
+    if (st === 'Active' && isVenueInSeason(duration, startMonth, currentMonth)) {
       active += monthly;
       venueCount++;
     }

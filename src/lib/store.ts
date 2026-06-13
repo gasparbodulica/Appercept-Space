@@ -1149,6 +1149,17 @@ export const useAppStore = create<AppState>()(
             };
             ccDb = mergedDatabases['db-clubcrowd'];
           }
+          // Add the new "Season starts" month column if it's missing.
+          if (ccDb && !ccDb.columns.some((c) => c.id === 'clc-season-start')) {
+            const seedStartCol = DATABASES['db-clubcrowd'].columns.find((c) => c.id === 'clc-season-start');
+            if (seedStartCol) {
+              const seasonIdx = ccDb.columns.findIndex((c) => c.id === 'clc-season');
+              const cols = [...ccDb.columns];
+              cols.splice(seasonIdx >= 0 ? seasonIdx + 1 : cols.length, 0, seedStartCol);
+              mergedDatabases['db-clubcrowd'] = { ...ccDb, columns: cols };
+              ccDb = mergedDatabases['db-clubcrowd'];
+            }
+          }
         }
 
         // Costs status → exactly Active / Past (drives whether a cost is still paid).

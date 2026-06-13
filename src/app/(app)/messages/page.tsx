@@ -43,6 +43,16 @@ function channelIconName(value?: string): string {
 
 const MENTION_ALL = new Set(['everyone', 'channel', 'all']);
 
+// "Today" / "Yesterday" / "13 June 2026" for a message's day.
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const yest = new Date(); yest.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 // Render message text, highlighting @everyone and @member mentions.
 function renderBody(text: string, channel: Channel | undefined, users: User[], currentUserId: string): React.ReactNode {
   const memberFirst = (channel?.member_ids ?? []).map((id) => {
@@ -392,9 +402,18 @@ export default function MessagesPage() {
                 const u = userById(m.sender_id);
                 const mine = m.sender_id === currentUserId;
                 const prev = messages[i - 1];
-                const grouped = prev && prev.sender_id === m.sender_id && (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60 * 1000);
+                const newDay = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
+                const grouped = !newDay && prev && prev.sender_id === m.sender_id && (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60 * 1000);
                 return (
-                  <div key={m.id} style={{
+                  <div key={m.id}>
+                  {newDay && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0 8px' }}>
+                      <div style={{ flex: 1, height: '0.5px', background: 'var(--color-border-subtle)' }} />
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{dayLabel(m.created_at)}</span>
+                      <div style={{ flex: 1, height: '0.5px', background: 'var(--color-border-subtle)' }} />
+                    </div>
+                  )}
+                  <div style={{
                     display: 'flex', gap: 10, alignItems: 'flex-start',
                     flexDirection: mine ? 'row-reverse' : 'row',
                     padding: grouped ? '1px 0' : '8px 0 1px',
@@ -427,6 +446,7 @@ export default function MessagesPage() {
                         setTimeout(() => useAppStore.getState().openRow(m.dbref!.row_id, m.dbref!.database_id), 120);
                       }} />}
                     </div>
+                  </div>
                   </div>
                 );
               })}

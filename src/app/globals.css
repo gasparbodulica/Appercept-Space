@@ -372,3 +372,18 @@ header {
   .grid-5-2   { grid-template-columns: 1fr 1fr !important; }
   .stack-sm   { grid-template-columns: 1fr !important; gap: 16px !important; }
 }
+
+/* Dashboard greeting + topbar compaction on phones */
+@media (max-width: 768px) {
+  .dash-greeting { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; margin-bottom: 20px !important; }
+  .dash-greeting h1 { font-size: 19px !important; line-height: 1.2; }
+  .topbar-hide-mobile { display: none !important; }
+}
+
+/* Database page: let the header/toolbar wrap instead of overlapping on phones */
+@media (max-width: 768px) {
+  .db-header { padding: 12px 12px 0 !important; }
+  .db-toolbar { flex-wrap: wrap !important; row-gap: 4px; }
+  .db-toolbar-spacer { display: none !important; }
+  .db-toolbar-actions { margin-bottom: 4px !important; }
+}

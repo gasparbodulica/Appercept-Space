@@ -100,11 +100,11 @@ export function Topbar({ breadcrumb = [], pageTitle, extra }: TopbarProps) {
 
       {/* Right actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginRight: 4 }}>Edited Jun 2</span>
+        <span className="topbar-hide-mobile" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginRight: 4 }}>Edited Jun 2</span>
 
         <button
           onClick={handleShare}
-          className="btn-ghost"
+          className="btn-ghost topbar-hide-mobile"
           style={{ padding: '4px 8px', fontSize: 'var(--text-xs)', gap: 4, color: shareCopied ? 'var(--color-green)' : undefined }}
           aria-label="Share"
         >
@@ -113,7 +113,7 @@ export function Topbar({ breadcrumb = [], pageTitle, extra }: TopbarProps) {
 
         <button
           onClick={() => setStarred((s) => !s)}
-          className="btn-ghost"
+          className="btn-ghost topbar-hide-mobile"
           style={{ padding: '4px 6px', color: starred ? 'var(--color-yellow, #f5c518)' : undefined }}
           aria-label="Favorite"
         >

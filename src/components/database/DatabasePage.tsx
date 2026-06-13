@@ -85,7 +85,7 @@ export function DatabasePage({ database, pageTitle, pageIcon, pageIconColor, pag
       <Topbar breadcrumb={["Appercept's Space HQ", pageTitle]} />
 
       {/* Page header */}
-      <div style={{ padding: '20px 24px 0', background: 'transparent' }}>
+      <div className="db-header" style={{ padding: '20px 24px 0', background: 'transparent' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <div style={{ position: 'relative' }}>
             <button
@@ -118,7 +118,7 @@ export function DatabasePage({ database, pageTitle, pageIcon, pageIconColor, pag
         </div>
 
         {/* Toolbar: view tabs + actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, borderBottom: '0.5px solid var(--color-border-subtle)' }}>
+        <div className="db-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 2, borderBottom: '0.5px solid var(--color-border-subtle)' }}>
           {views.map(view => (
             <ViewTab key={view.id} view={view} active={view.id === activeViewId} onClick={() => setActiveViewId(view.id)} />
           ))}
@@ -152,10 +152,10 @@ export function DatabasePage({ database, pageTitle, pageIcon, pageIconColor, pag
             )}
           </div>
 
-          <div style={{ flex: 1 }} />
+          <div className="db-toolbar-spacer" style={{ flex: 1 }} />
 
           {/* Filter / Sort / Properties buttons */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 6, paddingRight: 2 }}>
+          <div className="db-toolbar-actions" style={{ display: 'flex', gap: 6, marginBottom: 6, paddingRight: 2 }}>
             <ToolButton
               icon={<IconFilter size={13} />}
               label="Filter"

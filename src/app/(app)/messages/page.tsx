@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppStore, useCurrentAccount } from '@/lib/store';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { Topbar } from '@/components/layout/Topbar';
 import { Channel, User, ChatMessage } from '@/lib/types';
 import { PageIcon, PAGE_COLORS } from '@/lib/icons';
@@ -87,6 +88,10 @@ export default function MessagesPage() {
   const dms = myChannels.filter((c) => c.kind === 'dm');
 
   const [activeId, setActiveId] = useState<string>(myChannels[0]?.id ?? '');
+  const isMobile = useIsMobile();
+  const [mobileShowThread, setMobileShowThread] = useState(false);
+  // Selecting a conversation jumps to the thread pane on mobile.
+  const selectChannel = (id: string) => { setActiveId(id); setMobileShowThread(true); };
   const [draft, setDraft] = useState('');
   const [newModal, setNewModal] = useState(false);
   const [newChat, setNewChat] = useState(false);
@@ -201,7 +206,12 @@ export default function MessagesPage() {
       <Topbar breadcrumb={['Messages']} />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* ── Conversations list ── */}
-        <div style={{ width: 280, minWidth: 280, borderRight: '0.5px solid var(--color-border-subtle)', display: 'flex', flexDirection: 'column', background: 'var(--color-bg-surface)' }}>
+        <div style={{
+          width: isMobile ? '100%' : 280, minWidth: isMobile ? 0 : 280,
+          borderRight: '0.5px solid var(--color-border-subtle)',
+          display: isMobile && mobileShowThread ? 'none' : 'flex',
+          flexDirection: 'column', background: 'var(--color-bg-surface)',
+        }}>
           <div style={{ padding: '16px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
             <h2 style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Messages</h2>
             <button onClick={() => setPlusMenu((v) => !v)} title="New chat or channel"
@@ -228,7 +238,7 @@ export default function MessagesPage() {
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 12px' }}>
             <ListSection label="Channels" />
             {groups.map((c) => (
-              <ConvItem key={c.id} active={c.id === active?.id} onClick={() => setActiveId(c.id)}
+              <ConvItem key={c.id} active={c.id === active?.id} onClick={() => selectChannel(c.id)}
                 avatar={<EmojiTile emoji={c.emoji} color={c.color} />}
                 name={c.name} preview={lastMsg(c) ? `${userById(lastMsg(c)!.sender_id)?.name.split(' ')[0] ?? ''}: ${lastMsg(c)!.body}` : (c.description ?? 'No messages yet')} />
             ))}
@@ -240,7 +250,7 @@ export default function MessagesPage() {
               </button>
             </div>
             {dms.map((c) => (
-              <ConvItem key={c.id} active={c.id === active?.id} onClick={() => setActiveId(c.id)}
+              <ConvItem key={c.id} active={c.id === active?.id} onClick={() => selectChannel(c.id)}
                 avatar={dmAvatar(c, 32)}
                 name={dmTitle(c)} preview={lastMsg(c) ? `${userById(lastMsg(c)!.sender_id)?.name.split(' ')[0] ?? ''}: ${lastMsg(c)!.body ?? '📎 Attachment'}` : (isGroupDM(c) ? `${c.member_ids.length} people` : 'No messages yet')} />
             ))}
@@ -249,9 +259,18 @@ export default function MessagesPage() {
 
         {/* ── Active conversation ── */}
         {active ? (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+          <div style={{
+            flex: 1, display: isMobile && !mobileShowThread ? 'none' : 'flex',
+            flexDirection: 'column', overflow: 'hidden', position: 'relative', minWidth: 0,
+          }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '0.5px solid var(--color-border-subtle)', flexShrink: 0 }}>
+              {isMobile && (
+                <button onClick={() => setMobileShowThread(false)} aria-label="Back to conversations"
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', display: 'flex', padding: 2, marginRight: -4 }}>
+                  <IconArrowLeft size={20} />
+                </button>
+              )}
               {active.kind === 'dm' ? dmAvatar(active, 34) : <EmojiTile emoji={active.emoji} color={active.color} size={34} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -429,7 +448,7 @@ export default function MessagesPage() {
             </div>
           </div>
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
+          <div style={{ flex: 1, display: isMobile ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
             No conversations yet — create one with the + button.
           </div>
         )}

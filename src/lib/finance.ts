@@ -70,20 +70,20 @@ export function computeClubCurrentMonth(clubcrowdDb: Database | undefined): { ac
   const seasonC = clubcrowdDb.columns.find(c => c.name === 'Operating season');
   if (!feeC || !resC) return { active: 0, forecast: 0, venueCount: 0 };
   const currentMonth = new Date().getMonth() + 1;
-  let active = 0, forecast = 0, venueCount = 0;
+  let active = 0, venueCount = 0;
   for (const row of clubcrowdDb.rows) {
     const monthly = (Number(row.cells[feeC.id]) || 0) * (Number(row.cells[resC.id]) || 0);
     if (!monthly) continue;
     const st          = statC   ? String(row.cells[statC.id]   ?? '') : '';
     const seasonLabel = seasonC ? String(row.cells[seasonC.id] ?? '') : '';
-    if (st === 'Active' || st === 'Onboarding') {
-      if (isVenueInSeason(seasonLabel, currentMonth)) { active += monthly; venueCount++; }
-    } else if (st === 'Lead') {
-      forecast += monthly * parseSeasonMonths(seasonLabel);
+    // ONLY "Active" venues earn — and only during their operating season.
+    // Lead / Onboarding / Past are just labels and don't count anywhere.
+    if (st === 'Active' && isVenueInSeason(seasonLabel, currentMonth)) {
+      active += monthly;
+      venueCount++;
     }
-    // Past → excluded from both
   }
-  return { active: Math.round(active), forecast: Math.round(forecast), venueCount };
+  return { active: Math.round(active), forecast: 0, venueCount };
 }
 
 export function computeClubRevenue(clubcrowdDb: Database | undefined): { monthlyAvg: number; yearly: number; venueCount: number } {

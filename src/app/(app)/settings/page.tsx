@@ -54,9 +54,9 @@ function SettingsContent() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <Topbar breadcrumb={['Settings']} />
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="settings-body" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left settings nav */}
-        <nav style={{
+        <nav className="settings-nav" style={{
           width: 220, minWidth: 220, borderRight: '0.5px solid var(--color-border-subtle)',
           padding: '20px 8px', overflowY: 'auto', flexShrink: 0,
           background: 'var(--color-bg-surface)',
@@ -77,7 +77,7 @@ function SettingsContent() {
         </nav>
 
         {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto', background: 'var(--color-bg-base)', padding: '40px 56px' }}>
+        <div className="settings-content" style={{ flex: 1, overflowY: 'auto', background: 'var(--color-bg-base)', padding: '40px 56px' }}>
           <div style={{ maxWidth: 640 }}>
             {tab === 'profile' && <ProfileTab />}
             {tab === 'general' && <GeneralTab />}

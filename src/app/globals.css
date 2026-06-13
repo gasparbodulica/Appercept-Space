@@ -419,3 +419,16 @@ header {
   .scroll-x-mobile { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
   .grid-3-2 { grid-template-columns: 1fr 1fr !important; }
 }
+
+/* Settings: stack the side nav on top (horizontal, wrapping) on phones */
+@media (max-width: 768px) {
+  .settings-body { flex-direction: column !important; }
+  .settings-nav {
+    width: 100% !important; min-width: 0 !important; flex-shrink: 1 !important;
+    border-right: none !important;
+    border-bottom: 0.5px solid var(--color-border-subtle) !important;
+    display: flex !important; flex-direction: row !important; flex-wrap: wrap !important;
+    padding: 8px 10px !important; gap: 4px; max-height: none !important;
+  }
+  .settings-content { padding: 20px 16px !important; }
+}

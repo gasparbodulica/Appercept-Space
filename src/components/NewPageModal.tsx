@@ -53,7 +53,7 @@ export function NewPageModal() {
 
       <div style={{
         position: 'fixed', top: '26%', left: '50%', transform: 'translateX(-50%)',
-        width: 440, zIndex: 999,
+        width: 440, maxWidth: 'calc(100vw - 32px)', zIndex: 999,
         background: 'var(--color-bg-surface)',
         border: '0.5px solid var(--color-border-default)',
         borderRadius: 12, boxShadow: '0 24px 80px rgba(0,0,0,0.7)',

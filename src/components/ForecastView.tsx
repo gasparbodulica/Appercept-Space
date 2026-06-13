@@ -51,7 +51,7 @@ export function ForecastView({ pageId, pageTitle, pageIcon, pageIconColor }: {
           {/* Monthly run-rate */}
           <div>
             <h2 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Monthly run-rate</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+            <div className="grid-4-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
               <RunCard label="Monthly revenue" value={fmt(f.monthlyRevenue)} color="var(--color-teal)" icon={<IconCoinEuro size={15} />} sub="From your manual prediction above" />
               <RunCard label="Recurring costs" value={`− ${fmt(f.monthlyCosts)}`} color="var(--color-red)" icon={<IconReceipt size={15} />} sub="monthly + yearly costs / mo" />
               <RunCard label="Monthly profit" value={fmt(f.monthlyProfit)} color={f.monthlyProfit >= 0 ? 'var(--color-green)' : 'var(--color-red)'} icon={f.monthlyProfit >= 0 ? <IconTrendingUp size={15} /> : <IconTrendingDown size={15} />} sub="revenue − costs" highlight />
@@ -64,7 +64,7 @@ export function ForecastView({ pageId, pageTitle, pageIcon, pageIconColor }: {
               <IconPencil size={14} style={{ color: 'var(--color-accent-bright)' }} />
               <h2 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>Your predictions</h2>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
+            <div className="grid-4-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
               <Field
                 label="Expected monthly revenue"
                 hint="Your total expected monthly revenue — type it here"
@@ -100,7 +100,7 @@ export function ForecastView({ pageId, pageTitle, pageIcon, pageIconColor }: {
           {/* Quarterly forecast */}
           <div>
             <h2 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Quarterly forecast</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+            <div className="grid-4-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
               {f.quarters.map((q) => {
                 const h = Math.max(6, (Math.abs(q.revenue) / maxQ) * 90);
                 return (
@@ -126,7 +126,7 @@ export function ForecastView({ pageId, pageTitle, pageIcon, pageIconColor }: {
           {/* Full year */}
           <div style={{ background: 'linear-gradient(135deg, rgba(46,232,154,0.10), rgba(16,33,56,0))', border: '0.5px solid rgba(46,232,154,0.3)', borderRadius: 'var(--card-radius)', padding: '20px 24px' }}>
             <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>Full-year projection · {f.year.label}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+            <div className="grid-4-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
               <YearFig label="Projected revenue" value={fmt(f.year.revenue)} color="var(--color-teal)" />
               <YearFig label="Projected costs" value={`− ${fmt(f.year.costs)}`} color="var(--color-red)" />
               <YearFig label="Projected profit" value={fmt(f.year.profit)} color={f.year.profit >= 0 ? 'var(--color-green)' : 'var(--color-red)'} big />

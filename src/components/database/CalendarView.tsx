@@ -316,7 +316,7 @@ export function CalendarView({ database, view }: CalendarViewProps) {
               ))}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+            <div className="grid-2-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
               <div>
                 <label style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', display: 'block', marginBottom: 4 }}>From</label>
                 <input type="date" value={absenceModal.day} readOnly style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', outline: 'none', colorScheme: 'dark', boxSizing: 'border-box' }} />

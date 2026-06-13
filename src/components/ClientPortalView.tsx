@@ -191,7 +191,7 @@ export function ClientPortalView({ company, mode }: { company: string; mode: 'ag
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div className="grid-2-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
         <Card icon={<IconChartBar size={16} />} title="Progress" color="var(--color-accent-bright)">
           {projects.length === 0 ? <Empty>No active projects</Empty> : projects.map((p) => (
             <div key={p.id} style={{ padding: '10px 0', borderBottom: '0.5px solid var(--color-border-subtle)' }}>

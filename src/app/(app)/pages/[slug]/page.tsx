@@ -365,7 +365,7 @@ function ClubCrowdDashboard({ pageId, pageTitle, pageIcon, pageIconColor }: { pa
         {schemaOpen && db && <SchemaPanel databaseId={db.id} onClose={() => setSchemaOpen(false)} />}
 
         {/* Revenue stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <div className="grid-4-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           {[
             { label: 'Real yearly revenue',  value: fmtEur(totalYearly),        color: '#3ecf8e', icon: <IconCoinEuro size={14} />, hint: 'season-adjusted, all clubs', highlight: true },
             { label: 'Peak monthly revenue', value: fmtEur(totalRevenue),       color: '#635bff', icon: <IconReceipt size={14} />,  hint: 'when all clubs in-season' },
@@ -721,8 +721,8 @@ function TodoTimetable({ pageId, pageTitle, pageIcon, pageIconColor }: { pageId:
           )}
         </div>
 
-        {/* Week grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(140px, 1fr))', gap: 0, minHeight: 320 }}>
+        {/* Week grid — scrolls sideways on phones instead of overflowing */}
+        <div className="scroll-x-mobile" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(140px, 1fr))', gap: 0, minHeight: 320 }}>
           {weekDates.map((d, i) => {
             const key = weekKeys[i];
             const isToday = key === todayStr;

@@ -47,7 +47,7 @@ export function ConsultingDashboard({ database }: ConsultingDashboardProps) {
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div className="grid-4-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         {[
           { label: 'Pipeline Value', value: `€${(totalPipeline / 1000).toFixed(1)}k`, icon: <IconCurrencyEuro size={20} />, color: 'var(--color-accent-bright)' },
           { label: 'Active Projects', value: activeEngagements, icon: <IconPlayerPlay size={18} />, color: 'var(--color-amber)' },
@@ -75,7 +75,7 @@ export function ConsultingDashboard({ database }: ConsultingDashboardProps) {
       </div>
 
       {/* Main Content Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 24 }}>
+      <div className="grid-2-1" style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 24 }}>
         
         {/* Active Engagements List */}
         <div className="glass-card" style={{ padding: 24, border: '0.5px solid rgba(28, 117, 188, 0.2)', background: 'rgba(10, 20, 38, 0.4)' }}>

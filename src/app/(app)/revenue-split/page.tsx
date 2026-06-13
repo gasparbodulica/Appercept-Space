@@ -305,7 +305,7 @@ export default function RevenueSplitPage() {
                   </div>
                 )}
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)' }}>Or add someone new / external</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div className="grid-2-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Full name"
                     style={{ padding: '7px 10px', borderRadius: 7, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', outline: 'none' }} />
                   <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Role title"
@@ -339,7 +339,7 @@ export default function RevenueSplitPage() {
           <section>
             <h2 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>Payout calculator</h2>
             <div style={{ background: 'var(--color-bg-elevated)', border: '0.5px solid var(--color-border-default)', borderRadius: 'var(--card-radius)', padding: '20px 22px', boxShadow: '0 4px 20px rgba(0,0,0,0.25)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div className="grid-2-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                 {/* Left inputs */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {/* Billing company */}

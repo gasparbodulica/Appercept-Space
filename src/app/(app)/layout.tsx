@@ -10,7 +10,6 @@ import { NewPageModal } from '@/components/NewPageModal';
 import { AuthScreen } from '@/components/AuthScreen';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { ClientPortalView } from '@/components/ClientPortalView';
-import { AIAssistant } from '@/components/AIAssistant';
 import { ClientPortalSync } from '@/components/ClientPortalSync';
 import { SupabaseAuthSync } from '@/components/SupabaseAuthSync';
 import { WorkspaceBackupSync } from '@/components/WorkspaceBackupSync';
@@ -120,7 +119,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       <CommandPalette />
       <NewPageModal />
-      <AIAssistant />
       <ClientPortalSync />
       <SupabaseAuthSync />
       <WorkspaceBackupSync />

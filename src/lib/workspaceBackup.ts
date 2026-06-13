@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { useAppStore } from './store';
+import { ACCOUNTS, USERS } from './seed';
 
 // The localStorage key Zustand persist writes to (keep in sync with store.ts `name`).
 const PERSIST_KEY = 'appercept-space-store-v12';
@@ -46,10 +47,26 @@ function parseBlob(raw: unknown): { state?: Record<string, unknown> } | null {
   catch { return null; }
 }
 
-/** Remove the session field from a persisted-store object (mutates a copy). */
-function stripSession(parsed: { state?: Record<string, unknown> } | null): typeof parsed {
-  if (parsed?.state && 'sessionAccountId' in parsed.state) parsed.state.sessionAccountId = null;
+/** Strip PER-BROWSER identity from a persisted-store object (mutates a copy) so
+ *  it never travels to another person's browser via the shared cloud blob. */
+function stripIdentity(parsed: { state?: Record<string, unknown> } | null): typeof parsed {
+  if (parsed?.state) {
+    if ('sessionAccountId' in parsed.state) parsed.state.sessionAccountId = null;
+    delete parsed.state.currentUserId; // never sync "who am I"
+  }
   return parsed;
+}
+
+/** Ensure the built-in seed accounts & users always exist after applying a cloud
+ *  blob, so a logged-in person's account/identity is never orphaned by an older
+ *  cloud copy (which would otherwise fall back to the first user = the owner). */
+function ensureSeed(state: Record<string, unknown>): void {
+  const accounts = Array.isArray(state.accounts) ? state.accounts as Array<{ id: string }> : [];
+  for (const sa of ACCOUNTS) if (!accounts.some((a) => a.id === sa.id)) accounts.push(sa);
+  state.accounts = accounts;
+  const users = Array.isArray(state.users) ? state.users as Array<{ id: string }> : [];
+  for (const su of USERS) if (!users.some((u) => u.id === su.id)) users.push(su);
+  state.users = users;
 }
 
 /**
@@ -68,10 +85,14 @@ export function applyCloudBlobLive(rawData: unknown, updatedAt: string): void {
     // Guard 3: never wipe a populated local store with an empty remote.
     if (remoteRows === 0 && localRows > 0) return;
 
-    // Keep this browser's own session
-    let localSession: unknown = null;
-    try { localSession = (localParsed?.state ?? {}).sessionAccountId ?? null; } catch { /* none */ }
-    parsed.state.sessionAccountId = localSession;
+    // Keep THIS browser's own identity (who's logged in) — never take it from the
+    // shared cloud blob, or one person inherits another's account.
+    const ls = (localParsed?.state ?? {}) as Record<string, unknown>;
+    if (parsed.state) {
+      parsed.state.sessionAccountId = ls.sessionAccountId ?? null;
+      parsed.state.currentUserId = ls.currentUserId ?? (parsed.state.currentUserId ?? 'u-1');
+      ensureSeed(parsed.state); // keep built-in accounts/users so the session isn't orphaned
+    }
 
     applyingRemote = true;
     useAppStore.setState(parsed.state as Record<string, unknown>);
@@ -146,7 +167,7 @@ export async function saveWorkspaceBackup(): Promise<void> {
     // Guard 2: never overwrite a cloud that has data with an empty local store.
     if (localRows === 0 && lastCloudRows > 0) return;
 
-    const payload = JSON.stringify(stripSession(parsed)) ?? blob;
+    const payload = JSON.stringify(stripIdentity(parsed)) ?? blob;
     const updatedAt = new Date().toISOString();
     const { error } = await supabase
       .from('workspace_state')
@@ -200,9 +221,13 @@ export async function maybeRestoreWorkspaceBackup(): Promise<boolean> {
     if (localBlob && !cloudIsNewer && !(localRows === 0 && cloudRows > 0)) return false;
     if (!shouldRestore) return false;
 
-    let localSession: unknown = null;
-    try { localSession = (localParsed?.state ?? {}).sessionAccountId ?? null; } catch { /* none */ }
-    if (parsed.state) parsed.state.sessionAccountId = localSession;
+    // Preserve THIS browser's identity; restore data from the cloud.
+    const ls = (localParsed?.state ?? {}) as Record<string, unknown>;
+    if (parsed.state) {
+      parsed.state.sessionAccountId = ls.sessionAccountId ?? null;
+      if (ls.currentUserId) parsed.state.currentUserId = ls.currentUserId;
+      ensureSeed(parsed.state);
+    }
 
     localStorage.setItem(PERSIST_KEY, JSON.stringify(parsed));
     localStorage.setItem(SAVED_AT_KEY, cloudUpdatedAt);

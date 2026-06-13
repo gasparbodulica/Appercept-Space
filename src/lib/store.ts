@@ -633,7 +633,8 @@ export const useAppStore = create<AppState>()(
           const accounts = exists
             ? s.accounts.map((a) => a.id === 'acc-admin' ? { ...a, password: seedAdmin.password, role: seedAdmin.role, approved: true } : a)
             : [seedAdmin, ...s.accounts];
-          return { accounts, sessionAccountId: 'acc-admin', justSignedIn: true, authChecked: true };
+          const uid = s.users.find((u) => u.email.toLowerCase() === seedAdmin.email.toLowerCase())?.id ?? s.currentUserId;
+          return { accounts, sessionAccountId: 'acc-admin', currentUserId: uid, justSignedIn: true, authChecked: true };
         });
       },
 
@@ -645,7 +646,10 @@ export const useAppStore = create<AppState>()(
         const acc = get().accounts.find((a) => a.email.toLowerCase() === e);
         if (!acc || acc.password !== password) return { ok: false };
         if (isSupabaseConfigured) void signOutSupabase();
-        set({ sessionAccountId: acc.id, justSignedIn: acc.approved, authChecked: true });
+        // Link the login to its workspace user so this person is correctly
+        // identified (their name, tasks, messages) — never inherit someone else's.
+        const uid = get().users.find((u) => u.email.toLowerCase() === e)?.id ?? get().currentUserId;
+        set({ sessionAccountId: acc.id, currentUserId: uid, justSignedIn: acc.approved, authChecked: true });
         return { ok: true };
       },
 
@@ -655,10 +659,12 @@ export const useAppStore = create<AppState>()(
       setAuthedAccount: (account, justSignedIn = false) => set((s) => {
         if (!account) return { sessionAccountId: null, justSignedIn: false };
         const others = s.accounts.filter((a) => a.id !== account.id);
+        // Link to the matching workspace user so this person is correctly identified.
+        const uid = s.users.find((u) => u.email.toLowerCase() === account.email.toLowerCase())?.id ?? s.currentUserId;
         // Once the welcome screen is showing (justSignedIn=true) don't let a
         // follow-up auth event (TOKEN_REFRESHED, INITIAL_SESSION, etc.) reset it —
         // only clearJustSignedIn() may do that after the 3-second timer fires.
-        return { accounts: [account, ...others], sessionAccountId: account.id, justSignedIn: s.justSignedIn || justSignedIn };
+        return { accounts: [account, ...others], sessionAccountId: account.id, currentUserId: uid, justSignedIn: s.justSignedIn || justSignedIn };
       }),
       setAuthChecked: (v) => set({ authChecked: v }),
       clearJustSignedIn: () => set({ justSignedIn: false }),

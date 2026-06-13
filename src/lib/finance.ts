@@ -328,7 +328,6 @@ export function computeProjectRevenue(
   const monthlyCol = projectsDb.columns.find(c => c.id === 'pc-monthly' || c.name === 'Monthly (€)' || c.name === 'Monthly');
   const startCol   = projectsDb.columns.find(c => c.id === 'pc-start' || c.name === 'Start date' || c.name === 'Start');
   const endCol     = projectsDb.columns.find(c => c.id === 'pc-end'   || c.name === 'End date'   || c.name === 'End');
-  const statusCol  = projectsDb.columns.find(c => c.type === 'status');
   const clientCol  = projectsDb.columns.find(c => c.name === 'Client' || c.id === 'pc-client');
   const curYM = nowYM();
 
@@ -361,19 +360,21 @@ export function computeProjectRevenue(
   let upfrontThisMonth = 0, monthlyRecurring = 0, forecastUpfront = 0, forecastMonthly = 0;
 
   for (const row of projectsDb.rows) {
-    const status = statusCol ? String(row.cells[statusCol.id] ?? '') : '';
-    if (status === 'Done' || status === 'Completed') continue;
-
+    // The Start date is the trigger: a project earns NOTHING until it has a Start
+    // date (= when the client starts paying us). Status is purely for project
+    // management and never affects the money.
     const startYM = safeYM(startCol ? String(row.cells[startCol.id] ?? '') : '');
-    const endYM   = safeYM(endCol   ? String(row.cells[endCol.id]   ?? '') : '');
+    if (!startYM) continue; // not paying yet → €0
+
+    const endYM   = safeYM(endCol ? String(row.cells[endCol.id] ?? '') : '');
     const cst     = clientStatusOf(row); // 'Lead' | 'Active' | 'Past' | 'Onboarding' | ''
 
     const upfront = upfrontCol ? (Number(row.cells[upfrontCol.id]) || 0) : 0;
     const monthly = monthlyCol ? (Number(row.cells[monthlyCol.id]) || 0) : 0;
 
-    const upfrontCountsNow  = upfront > 0 && (!startYM || startYM === curYM);
-    const started           = !startYM || startYM <= curYM;
-    const notEnded          = !endYM   || endYM   >= curYM;
+    const upfrontCountsNow  = upfront > 0 && startYM === curYM; // one-time, in its start month
+    const started           = startYM <= curYM;
+    const notEnded          = !endYM || endYM >= curYM;
     const monthlyCountsNow  = monthly > 0 && started && notEnded;
 
     if (cst === 'Lead') {

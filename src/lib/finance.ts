@@ -149,12 +149,14 @@ function isStoppedCostStatus(status: string): boolean {
 
 /**
  * The amount this cost row contributes to the CURRENT month's expenses,
- * honouring its billing frequency AND its status:
- *   • One-time → full amount only in the month it is dated
- *   • Monthly  → full amount every month from its start date onward
- *   • Yearly   → amortised (amount ÷ 12) every month from its start date onward
- * A cost whose Status is Past / Cancelled / Inactive / Stopped / Ended is no
- * longer being paid, so it contributes 0 (we stopped using it).
+ * honouring its date, billing frequency AND its status. The cost is taken out
+ * starting on its date and recurs by frequency:
+ *   • One-time → full amount, once, in the month of its date
+ *   • Monthly  → full amount every month from its date onward
+ *   • Yearly   → full amount once a year, in the same calendar month as its date
+ * A future-dated cost contributes 0 until its date arrives (day-level). A cost
+ * whose Status is Past / Cancelled / Inactive / Stopped / Ended is no longer
+ * being paid, so it contributes 0.
  */
 export function effectiveMonthlyCost(row: Row, cols: CostCols, currentYM: string): number {
   if (!cols.amountCol || !cols.dateCol) return 0;
@@ -165,14 +167,26 @@ export function effectiveMonthlyCost(row: Row, cols: CostCols, currentYM: string
   const status = cols.statusCol ? String(row.cells[cols.statusCol.id] ?? '') : '';
   if (status && isStoppedCostStatus(status)) return 0;
 
-  const dateVal = row.cells[cols.dateCol.id];
-  const startYM = dateVal ? ym(String(dateVal)) : null;
+  const dateRaw = String(row.cells[cols.dateCol.id] ?? '');
+  const dateISO = /^\d{4}-\d{2}-\d{2}/.test(dateRaw) ? dateRaw.slice(0, 10) : '';
   const freq = cols.freqCol ? String(row.cells[cols.freqCol.id] ?? 'One-time') : 'One-time';
+
+  // Day-level: a future-dated cost hasn't been paid yet.
+  const now = new Date();
+  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if (dateISO && dateISO > todayISO) return 0;
+
+  const startYM = dateISO ? dateISO.slice(0, 7) : '';
   const started = !startYM || startYM <= currentYM;
 
   if (freq === 'Monthly') return started ? amt : 0;
-  if (freq === 'Yearly') return started ? amt / 12 : 0;
-  // One-time (default)
+  if (freq === 'Yearly') {
+    if (!started) return 0;
+    if (!startYM) return amt / 12; // no date set → fall back to amortised
+    // Full amount in the same calendar month it started, every year.
+    return startYM.slice(5, 7) === currentYM.slice(5, 7) ? amt : 0;
+  }
+  // One-time (default) — once, in its month.
   return startYM === currentYM ? amt : 0;
 }
 

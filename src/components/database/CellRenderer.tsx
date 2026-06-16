@@ -5,7 +5,7 @@ import { Column, Row, CellValue } from '@/lib/types';
 import { useAppStore } from '@/lib/store';
 import { formatDate, getStatusConfig, getPriorityConfig, getTagConfig, isOverdue } from '@/lib/utils';
 import { findCostsDb, companyMonthlyExpenses, findClientsDb, companyRevenue } from '@/lib/finance';
-import { IconSearch, IconX, IconPlus, IconEye, IconEyeOff, IconCopy, IconCheck } from '@tabler/icons-react';
+import { IconSearch, IconX, IconPlus, IconEye, IconEyeOff, IconCopy, IconCheck, IconUpload, IconDownload } from '@tabler/icons-react';
 
 interface CellProps {
   column: Column;
@@ -33,8 +33,9 @@ export function CellRenderer({ column, row, databaseId, isEditing, onStartEdit, 
     onStartEdit();
   }, [onStartEdit]);
 
-  // Formula columns are computed & read-only — never enter edit mode.
-  const editable = column.type !== 'formula';
+  // Formula columns are computed & read-only; file cells manage their own
+  // upload/download UI — neither enters the text edit mode.
+  const editable = column.type !== 'formula' && column.type !== 'file';
 
   return (
     <div ref={containerRef} style={{ height: '100%', width: '100%' }}>
@@ -115,6 +116,8 @@ function DisplayCell({ column, row, databaseId, value, onClick }: { column: Colu
       const overdue = isOverdue(str);
       return <div style={{ ...style, color: overdue ? 'var(--color-red)' : 'var(--color-text-secondary)' }} onClick={onClick}>{formatDate(str)}</div>;
     }
+    case 'file':
+      return <FileCell column={column} row={row} databaseId={databaseId} value={value} />;
     case 'person': {
       if (!value) return <div style={style} onClick={onClick} />;
       const users = useAppStore.getState().users;
@@ -272,6 +275,89 @@ function PasswordCell({ value, onClick }: { value: string; onClick: () => void }
             {revealed ? <IconEyeOff size={15} /> : <IconEye size={15} />}
           </button>
         </>
+      )}
+    </div>
+  );
+}
+
+// ─── File upload/download cell ────────────────────────────────────────────────
+// Stores the file as JSON { name, url(dataURL), size, mime }. On upload it also
+// auto-fills the row's "Size (MB)" column and the name column (if empty).
+
+interface StoredFile { name: string; url: string; size: number; mime?: string }
+
+function FileCell({ column, row, databaseId, value }: { column: Column; row: Row; databaseId: string; value: CellValue }) {
+  const { updateCell, databases } = useAppStore();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  let file: StoredFile | null = null;
+  if (value) {
+    const s = String(value);
+    try {
+      const p = JSON.parse(s);
+      if (p && typeof p === 'object' && p.url) file = p as StoredFile;
+    } catch {
+      // Legacy plain URL/link value → treat as a downloadable link.
+      if (/^https?:|^data:/.test(s)) file = { name: s.split('/').pop() || 'file', url: s, size: 0 };
+    }
+  }
+
+  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    if (f.size > 8 * 1024 * 1024) { alert('File is too large — max 8 MB.'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateCell(databaseId, row.id, column.id, JSON.stringify({ name: f.name, url: reader.result, size: f.size, mime: f.type }));
+      const db = databases[databaseId];
+      const sizeCol = db?.columns.find((c) => /size/i.test(c.name) && c.type === 'number');
+      if (sizeCol) updateCell(databaseId, row.id, sizeCol.id, Math.round((f.size / 1024 / 1024) * 100) / 100);
+      const nameCol = db?.columns.find((c) => c.name === 'File name') ?? db?.columns.find((c) => c.position === 0);
+      if (nameCol && !row.cells[nameCol.id]) updateCell(databaseId, row.id, nameCol.id, f.name);
+    };
+    reader.readAsDataURL(f);
+  };
+
+  const download = () => {
+    if (!file) return;
+    const a = document.createElement('a');
+    a.href = file.url; a.download = file.name; a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  const linkStyle: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1,
+    border: 'none', background: 'none', cursor: 'pointer', padding: 0,
+    color: 'var(--color-accent-bright)', fontSize: 'var(--text-xs)', fontWeight: 500,
+  };
+  const iconBtn: React.CSSProperties = {
+    width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', borderRadius: 5,
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: '100%', width: '100%', padding: '0 8px', overflow: 'hidden' }}>
+      <input ref={inputRef} type="file" style={{ display: 'none' }} onChange={onPick} />
+      {file ? (
+        <>
+          <button onClick={download} title={`Download ${file.name}`} style={linkStyle}>
+            <IconDownload size={13} style={{ flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+          </button>
+          <button onClick={() => inputRef.current?.click()} title="Replace file" style={iconBtn}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-primary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}>
+            <IconUpload size={12} />
+          </button>
+        </>
+      ) : (
+        <button onClick={() => inputRef.current?.click()}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 6, border: '0.5px dashed var(--color-border-default)', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-accent-bright)'; e.currentTarget.style.borderColor = 'var(--color-accent-bright)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.borderColor = 'var(--color-border-default)'; }}>
+          <IconUpload size={13} /> Upload
+        </button>
       )}
     </div>
   );

@@ -208,6 +208,7 @@ const PASSWORD_ROWS: Row[] = [];
 const CLUBCROWD_COLS: Column[] = [
   { id: 'clc-venue',       database_id: 'db-clubcrowd', name: 'Venue name',             type: 'text',   position: 0, config: {},                       hidden: false, width: 200 },
   { id: 'clc-city',        database_id: 'db-clubcrowd', name: 'City',                   type: 'text',   position: 1, config: {},                       hidden: false, width: 120 },
+  { id: 'clc-contact',     database_id: 'db-clubcrowd', name: 'Contact info',           type: 'text',   position: 1.5, config: {},                     hidden: false, width: 220 },
   { id: 'clc-fee',         database_id: 'db-clubcrowd', name: 'Fee / reservation (€)',  type: 'number', position: 2, config: { prefix: '€' },           hidden: false, width: 160 },
   { id: 'clc-reservations',database_id: 'db-clubcrowd', name: 'Monthly reservations',   type: 'number', position: 3, config: {},                       hidden: false, width: 160 },
   { id: 'clc-avg-spend',   database_id: 'db-clubcrowd', name: 'Avg table spend (€)',    type: 'number', position: 4, config: { prefix: '€' },           hidden: false, width: 150 },
@@ -228,7 +229,7 @@ const FILE_COLS: Column[] = [
   { id: 'fc-name', database_id: 'db-files', name: 'File name', type: 'text', position: 0, config: {}, hidden: false, width: 260 },
   { id: 'fc-type', database_id: 'db-files', name: 'Type', type: 'select', position: 1, config: { options: [{ id: 'ft1', label: 'PDF', color: '#ff5c5c' }, { id: 'ft-pptx', label: 'PPTX', color: '#fb923c' }, { id: 'ft-docx', label: 'DOCX', color: '#4f6fff' }, { id: 'ft-xlsx', label: 'XLSX', color: '#3ecf8e' }, { id: 'ft2', label: 'Image', color: '#a78bfa' }, { id: 'ft5', label: 'Video', color: '#2dd4bf' }, { id: 'ft6', label: 'Archive', color: '#6b7280' }, { id: 'ft7', label: 'Other', color: '#f5c518' }] }, hidden: false, width: 120 },
   { id: 'fc-size', database_id: 'db-files', name: 'Size (MB)', type: 'number', position: 2, config: { suffix: ' MB' }, hidden: false, width: 100 },
-  { id: 'fc-url', database_id: 'db-files', name: 'URL / Link', type: 'url', position: 3, config: {}, hidden: false, width: 220 },
+  { id: 'fc-url', database_id: 'db-files', name: 'File', type: 'file', position: 3, config: {}, hidden: false, width: 220 },
   { id: 'fc-by', database_id: 'db-files', name: 'Uploaded by', type: 'person', position: 4, config: {}, hidden: false, width: 150 },
   { id: 'fc-date', database_id: 'db-files', name: 'Upload date', type: 'date', position: 5, config: {}, hidden: false, width: 120 },
   { id: 'fc-tags', database_id: 'db-files', name: 'Tags', type: 'tags', position: 6, config: {}, hidden: false, width: 180 },

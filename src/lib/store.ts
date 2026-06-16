@@ -1133,6 +1133,15 @@ export const useAppStore = create<AppState>()(
         if (filesDb && filesDb.views.length === 1 && filesDb.views[0].id === 'fv-all') {
           mergedDatabases['db-files'] = { ...filesDb, views: DATABASES['db-files'].views };
         }
+        // Convert the old URL/Link column into an uploadable "File" column.
+        const filesDb2 = mergedDatabases['db-files'];
+        const urlCol = filesDb2?.columns.find((c) => c.id === 'fc-url');
+        if (filesDb2 && urlCol && urlCol.type !== 'file') {
+          mergedDatabases['db-files'] = {
+            ...filesDb2,
+            columns: filesDb2.columns.map((c) => c.id === 'fc-url' ? { ...c, type: 'file' as const, name: 'File' } : c),
+          };
+        }
 
         // Migrate ClubCrowd DB to the new revenue (fee-per-reservation) schema.
         // The old schema had a 'clc-plan' column; if it's still there, replace
@@ -1162,6 +1171,17 @@ export const useAppStore = create<AppState>()(
               const seasonIdx = ccDb.columns.findIndex((c) => c.id === 'clc-season');
               const cols = [...ccDb.columns];
               cols.splice(seasonIdx >= 0 ? seasonIdx + 1 : cols.length, 0, seedStartCol);
+              mergedDatabases['db-clubcrowd'] = { ...ccDb, columns: cols };
+              ccDb = mergedDatabases['db-clubcrowd'];
+            }
+          }
+          // Add the new "Contact info" column if it's missing.
+          if (ccDb && !ccDb.columns.some((c) => c.id === 'clc-contact')) {
+            const seedContactCol = DATABASES['db-clubcrowd'].columns.find((c) => c.id === 'clc-contact');
+            if (seedContactCol) {
+              const cityIdx = ccDb.columns.findIndex((c) => c.id === 'clc-city');
+              const cols = [...ccDb.columns];
+              cols.splice(cityIdx >= 0 ? cityIdx + 1 : cols.length, 0, seedContactCol);
               mergedDatabases['db-clubcrowd'] = { ...ccDb, columns: cols };
               ccDb = mergedDatabases['db-clubcrowd'];
             }
